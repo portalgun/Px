@@ -1,0 +1,47 @@
+#+BEGIN_src
+  ██▓███  ▒██   ██▒
+ ▓██░  ██▒▒▒ █ █ ▒░
+ ▓██░ ██▓▒░░  █   ░
+ ▒██▄█▓▒ ▒ ░ █ █ ▒
+ ▒██▒ ░  ░▒██▒ ▒██▒
+ ▒▓▒░ ░  ░▒▒ ░ ░▓ ░
+ ░▒ ░     ░░   ░▒ ░
+ ░░        ░    ░
+           ░    ░
+ [rootPrjDir,rootStbDir,rootTlbxDir,rootHookDir]=px(prj,bStable,bVarsOnly)
+
+ Project Switcher
+    Manages your Matlab project paths dynamically and with ease
+    Inspired by toolboxtoolbox
+
+ example call:
+           px
+           (then return a number corresponding to a project)
+
+ SETUP INSTRUCTIONS:
+    1. PLACE BELOW IN YOUR STARTUP FILE
+          pxPath='/some/path/to/this/file'
+          run(pxPath)
+    2. SET THESE VARIABLES BELOW
+       rootPrjDir
+          Specifies a directory where all your projects will be
+       rootTlbxDir
+          Specifies a directory where toolboxes are located
+          Toolboxes will always load with all projects, but projects given priority
+
+    Optional variables:
+       rootStbDir
+          Specifies a directory where all your projects will be
+       rootHookDir
+          Specifies a directory where project hooks are located
+          To create a hook, create a .m file with the same name as the project directory
+
+          Hook can be script or function. If function, can px will return one of its outputs as 'out'
+
+     Set per project dependencies
+          In project directory create .px file
+          d:projectName - development
+          s:projectName - stable
+          e:toolboxName - exclude a particular toolbox
+          eAll:
+#+ENDSRC
