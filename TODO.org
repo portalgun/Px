@@ -1,0 +1,38 @@
+- read main directories from config
+    R
+      root
+      (with defaults below)
+      rootWrkdir 
+      rootSWrkdir
+      rootPrjDir 
+      rootStbDir
+      rootTlbxDir
+      rootHookDir
+- each project has own history
+    in setup create history.m in project directory
+    rm matlab version of history.m
+    symlihnk tb history.m to matlab version.m
+    rmsymlink on project change and relink new
+- libraries directory
+- handle no config for a project
+- make stable m files read only
+- do gtags within workspaces
+- i option (???)
+- link toolboxes if marked as such in config
+- +modules?
+ 
+* GIT
+- checkout hash
+- get current hash
+- add git tag/branch option
+
+[prjtype]:[directory]:[hash/tag]:[url]
+  prjtype - 1 letter code
+directory - starts with . or /
+url       - has periods not at start
+if directory empty
+    checkout
+    put it into lib
+if hash/tag empty
+    assume master
+          put into config

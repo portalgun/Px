@@ -1,7 +1,6 @@
 _config_
 .current_project
 .projectile
-#pxr.m#
 startup.m
 install.m
 init.sh
