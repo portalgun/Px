@@ -36,10 +36,16 @@ methods
         obj.hostname=Px.get_hostname();
         obj.get_self_path();
         obj.config=[obj.selfpath '_config_'];
+        if ~exist(obj.config,'file')
+            obj.setup();
+        end
 
         obj.get_root_dir();
         obj.get_dirs();
         addpath(obj.selfpath);
+        if ~isempty(prj) && (isnumeric(prj) || strcmp(prj,'_0_'))
+            prj=Px.get_current();
+        end
 
         if ~exist('prj','var') || isempty(prj)
             obj.get_prjs(bStable);
@@ -90,6 +96,8 @@ methods
         if bEcho
             display('Done.')
         end
+    end
+    function obj=setup(obj)
     end
     function obj=get_root_dir(obj)
         fid = fopen(obj.config);
@@ -159,6 +167,9 @@ methods
             obj.(prps{i})=Px.filesepc(obj.(prps{i}));
             if ~startsWith(obj.(prps{i}), obj.root) && ~Px.regExp(obj.(prps{i}),'^([A-Z]:|/)')
                 obj.(prps{i})=[obj.root obj.(prps{i})];
+                if ~exist(obj.(prps{i}),'dir')
+                    mkdir(obj.(prps{i}));
+                end
             end
         end
 
