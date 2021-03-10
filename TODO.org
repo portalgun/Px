@@ -1,26 +1,22 @@
-- read main directories from config
-    R
-      root
-      (with defaults below)
-      rootWrkdir 
-      rootSWrkdir
-      rootPrjDir 
-      rootStbDir
-      rootTlbxDir
-      rootHookDir
-- each project has own history
+- handle no config for a project
+   - prompt to insert projects line if doesn't exist
+- setup
+    create config
+    ask for startup file
+    ask to scan dirs
+
+- libraries directory l:
+- make stable m files read only
+- do gtags within workspaces
+- i option (???) - ignore toolbox
+- link toolboxes if marked as such in config
+- +modules?
+* History 
+each project has own history
     in setup create history.m in project directory
     rm matlab version of history.m
     symlihnk tb history.m to matlab version.m
     rmsymlink on project change and relink new
-- libraries directory
-- handle no config for a project
-- make stable m files read only
-- do gtags within workspaces
-- i option (???)
-- link toolboxes if marked as such in config
-- +modules?
- 
 * GIT
 - checkout hash
 - get current hash
@@ -36,3 +32,7 @@ if directory empty
 if hash/tag empty
     assume master
           put into config
+
+
+get rid of stable directories, just name them differently
+    prj__hash
