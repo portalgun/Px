@@ -1,22 +1,56 @@
-- handle no config for a project
-   - prompt to insert projects line if doesn't exist
+- get home directory windows
 - setup
+    matlabinstalldirectory
     create config
     ask for startup file
     ask to scan dirs
 
+- i option (???) - ignore toolbox
 - libraries directory l:
 - make stable m files read only
 - do gtags within workspaces
-- i option (???) - ignore toolbox
 - link toolboxes if marked as such in config
 - +modules?
-* History 
-each project has own history
-    in setup create history.m in project directory
-    rm matlab version of history.m
-    symlihnk tb history.m to matlab version.m
-    rmsymlink on project change and relink new
+* History  NOTES
+%com.mathworks.mlservices.MLCommandHistoryServices.getAllHistory
+%com.mathworks.mlservices.MLCommandHistoryServices.getSessionHistory
+%com.mathworks.mlservices.MLCommandHistoryServices.add(string)
+% removeall
+% save
+% getSessionHistory
+%com.mathworks.ide.cmdline.CommandHistory.deleteAllHistoryForDesktop;
+%com.mathworks.mlservices.MLCommandHistoryServices.
+%com.mathworks.mlservices.MLExecuteServices.consoleEval
+
+history option
+
+
+com.mathworks.mde.cmdhist.CmdHistory.getInstance
+com.mathworks.mde.cmdhist.AltHistory.getInstance()
+com.mathworks.mde.cmdhist.AltHistory.getRecalledCommands
+
+import java.io.File
+
+
+file = new File(com.mathworks.util.FileUtils.getPreferencesDirectory , "History.xml");
+
+<command batch="true" repeat="2 error="true" "execution_time="" ></command>
+<command time_stamp"">>%-- 05/13/2020 03:42:37 PM --%</command>
+
+# run commmand, add to history
+com.mathworks.mlservices.MLExecuteServices.executeCommand('')
+# run command, do not add to history
+com.mathworks.mlservices.MLExecuteServices.consoleEval('')
+
+# add to history
+com.mathworks.mlservices.MLCommandHistoryServices.add('px')
+?exec time
+?repeat
+?error
+?batch
+
+
+
 * GIT
 - checkout hash
 - get current hash

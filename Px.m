@@ -21,6 +21,7 @@ properties
     prjconfig
     prjDir
     prjWDir
+    bHistory=1
 end
 properties(Hidden)
     bEcho
@@ -28,6 +29,7 @@ properties(Hidden)
     stableflag
     hostname
     curWrk
+    matroot
 end
 methods
     function obj=Px(prj,bStable,bEcho)
@@ -39,6 +41,8 @@ methods
         else
             obj.bEcho=bEcho;
         end
+
+
         obj.hostname=Px.get_hostname();
         obj.get_self_path();
         obj.rootconfig=[obj.selfPath '.config'];
@@ -98,6 +102,11 @@ methods
         end
 
         obj.cd_prj();
+
+        if obj.bHistory
+            obj.make_history();
+        end
+
         obj.run_hooks();
         if obj.bEcho
             display('Done.')
@@ -131,6 +140,84 @@ methods
             error('No root directory found in config');
         end
 
+    end
+    function obj=make_history(obj)
+        obj.save_history();
+        %/home/dambam/.matlab/java/jar/mlservices.jar
+        %% MAKE history files
+        prjdir=obj.prjDir;
+        mdir=Px.filesepc(prefdir);
+
+        names={'history.m','History.xml','History.bak'};
+        % History.xml = desktop command history
+
+        for i = 1:length(names)
+            history_fun(names{i},prjdir,mdir);
+        end
+
+        obj.reload_history();
+
+        function history_fun(name,prjdir,mdir)
+            pHist=[prjdir '.' name];
+            mHist=[mdir name];
+            if ~exist(mHist,'file')
+                error(['History file ' name 'does not exist']);
+            end
+            if ~exist(pHist,'file')
+                Px.touch(pHist);
+            end
+            bSym=Px.issymboliclink(mHist);
+            if bSym && strcmp(Px.linksource(mHist),pHist);
+                return
+            elseif bSym
+                delete(mHist);
+            else
+                movefile(mHist,[mHist '_bak']);
+            end
+
+            Px.LN(pHist,mHist);
+
+
+        end
+    end
+    function obj=history2string(obj,dire)
+        history = string(fileread(fullfile(dire, 'History.xml')));
+    end
+    function obj=clear_history(obj)
+        com.mathworks.mlservices.MLCommandHistoryServices.removeAll;
+    end
+    function obj=save_history(obj)
+        com.mathworks.mlservices.MLCommandHistoryServices.save;
+    end
+    function obj=reload_history(obj)
+        file=java.io.File(com.mathworks.util.FileUtils.getPreferencesDirectory, "History.xml");
+        com.mathworks.mde.cmdhist.AltHistory.load(file,false);
+    end
+    function obj=load_history_from_file(obj)
+        mdir=Px.filesepc(prefdir);
+        mHist=[mdir 'history.m'];
+    end
+    function obj=restore_original_history(obj)
+        dire=prefdir;
+        mHistM=[dire 'history.m'];
+        mHistX=[dire 'History.xml'];
+        mHistB=[dire 'History.bak'];
+
+        % DELETE SYMS
+        if issymboliclink(mHistM)
+            delete(mHistM);
+        end
+        if issymboliclink(mHistX)
+            delete(mHistX);
+        end
+        if issymboliclink(mHistB)
+            delete(mHistB);
+        end
+
+        % Restore OLD
+        movefile([mHistM '_bak'],mHistM);
+        movefile([mHistX '_bak'],mHistX);
+        movefile([mHistB '_bak'],mHistB);
     end
     function obj=get_paths()
     end
@@ -601,6 +688,9 @@ methods(Static,Access=private)
             disp(gdSrc);
         end
     end
+    function out=touch(fname)
+        out=fclose(fopen(fname,'w'));
+    end
     function [a,b]=strip_fun(tline)
         [a,b]=strtok(tline,':');
         a=a(end);
@@ -628,6 +718,17 @@ methods(Static,Access=private)
             dest=[dest filesep];
         end
     end
+    function lines=file2cell(fname)
+        fid = fopen(fname);
+        tline = fgetl(fid);
+        lines={};
+        while ischar(tline)
+            lines{end+1}=tline;
+            tline = fgetl(fid);
+        end
+        fclose(fid);
+    end
+
 end
 methods(Static)
     function out=getProjects(rootPrjDir,accept)
