@@ -17,10 +17,13 @@ properties
     tlbxs
 
     Options
-    config
+    rootconfig
+    prjconfig
+    prjDir
+    prjWDir
 end
 properties(Hidden)
-    selfpath
+    selfPath
     stableflag
     hostname
     curWrk
@@ -35,14 +38,14 @@ methods
         end
         obj.hostname=Px.get_hostname();
         obj.get_self_path();
-        obj.config=[obj.selfpath '_config_'];
-        if ~exist(obj.config,'file')
+        obj.rootconfig=[obj.selfPath '.config'];
+        if ~exist(obj.rootconfig,'file')
             obj.setup();
         end
 
         obj.get_root_dir();
         obj.get_dirs();
-        addpath(obj.selfpath);
+        addpath(obj.selfPath);
         if ~isempty(prj) && (isnumeric(prj) || strcmp(prj,'_0_'))
             prj=Px.get_current();
         end
@@ -61,21 +64,21 @@ methods
         if bStable
             obj.stableflag=1;
         end
+        obj.get_prj_dir();
+        obj.prjconfig=[obj.prjDir '.px'];
 
         obj.save_cur_prj();
 
         restoredefaultpath;
-        addpath(obj.selfpath);
+        addpath(obj.selfPath);
 
         obj.get_prj_options();
         obj.make_wrk_dir();
         obj.parse_prj_options();
 
-        if obj.stableflag==1 && ~strcmp(obj.prj,'_0_')
-            Px.addToPath([obj.rootSWrkdir obj.prj]);
-        elseif ~strcmp(obj.prj,'_0_')
-            Px.addToPath([obj.rootWrkDir obj.prj]);
-        end
+
+        Px.addToPath(obj.prjWDir);
+
 
         %GETTOOLBOXES
         obj.tlbxs=Px.getProjects(obj.rootTlbxDir,1);
@@ -100,7 +103,7 @@ methods
     function obj=setup(obj)
     end
     function obj=get_root_dir(obj)
-        fid = fopen(obj.config);
+        fid = fopen(obj.rootconfig);
         while true
             line=fgetl(fid);
             if ~ischar(line); break; end
@@ -131,7 +134,8 @@ methods
     function obj=get_self_path(obj)
         fname=mfilename;
         fdir=mfilename('fullpath');
-        obj.selfpath=strrep(fdir,fname,'');
+        dir=[obj.rootStbDir obj.prj];
+        obj.selfPath=strrep(fdir,fname,'');
     end
     function obj=add_self_path(obj)
     end
@@ -193,6 +197,7 @@ methods
         obj.prjs(ismember(obj.prjs,obj.ignoreDirs))=[];
         obj.sprjs=Px.getProjects(obj.rootStbDir);
         obj.sprjs(ismember(obj.sprjs,obj.ignoreDirs))=[];
+
     end
     function obj=disp_prjs(obj)
         disp([newline '  r last open project']);
@@ -209,11 +214,16 @@ methods
         end
     end
     function obj=cd_prj(obj)
+        cd(obj.prjDir);
+    end
+    function obj=get_prj_dir(obj)
         %CHANGE DIRECTORY TO PROJECT DIRECTORY
         if obj.stableflag==1 && ~strcmp(obj.prj,'_0_')
-            cd([obj.rootStbDir obj.prj]);
+            obj.prjDir=[obj.rootStbDir obj.prj filesep];
+            obj.prjWDir=[obj.rootSWrkdir obj.prj filesep];
         elseif ~strcmp(obj.prj,'_0_')
-            cd([obj.rootPrjDir obj.prj]);
+            obj.prjDir=([obj.rootPrjDir obj.prj filesep]);
+            obj.prjWDir=[obj.rootWrkDir obj.prj filesep];
         end
     end
     function obj=prompt_prj(obj)
@@ -262,9 +272,9 @@ methods
     function obj=save_cur_prj(obj)
         % TODO different for PC
         if obj.stableflag==1
-            cmd=['echo s:' obj.prj ' > ' obj.selfpath '.current_project'];
+            cmd=['echo s:' obj.prj ' > ' obj.selfPath '.current_project'];
         else
-            cmd=['echo ' obj.prj ' > ' obj.selfpath '.current_project'];
+            cmd=['echo ' obj.prj ' > ' obj.selfPath '.current_project'];
         end
         system(cmd);
     end
@@ -298,6 +308,17 @@ methods
         end
     end
     function obj=get_prj_options(obj)
+        [obj,exitflag]=obj.get_prj_options_helper(obj.prjconfig);
+        if exitflag==1
+            [obj,exitflag]=obj.get_prj_options_helper(obj.rootconfig);
+        else
+            return
+        end
+        if exitflag==1
+            disp('No config file. Skipping.')
+        end
+    end
+    function [obj,exitflag]=get_prj_options_helper(obj,config)
         %function []=pxs(rootPrjDir,rootStbDir,rootTlbxDir)
         %px symbolic links - handle dependencies
         % TODO
@@ -305,12 +326,13 @@ methods
 
         %get config file
 
-        if ~exist(obj.config,'file')
-            disp('No config file. Skipping.')
+        exitflag=0;
+        if ~exist(config,'file')
+            exitflag=1;
             return
         end
 
-        fid=fopen(obj.config);
+        fid=fopen(config);
 
         %Section into seperate configs & create full paths
         obj.Options=cell(0);
