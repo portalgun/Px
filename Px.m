@@ -420,8 +420,32 @@ methods
             mkdir(obj.curWrk);
         end
     end
-
     function obj=parse_prj_options(obj)
+        obj.rm_removed_symlinks();
+        obj.populate_wrk_dir();
+    end
+    function obj=rm_removed_symlinks(obj)
+        deps=obj.Options{1};
+        deps=cellfun(@get_name_fun,deps,'UniformOutput',false);
+
+        dirs=dir(obj.curWrk);
+        name=transpose({dirs.name});
+        full=join([transpose({dirs.folder}) name],filesep);
+        ind=vertcat(dirs.isdir) & ~ismember(name,[{'.','..'}, deps]);
+        rmdirs=full(ind);
+        for i = 1:length(rmdirs)
+            delete(rmdirs{i}); % works with symlinks
+        end
+
+        function out=get_name_fun(file)
+            if endsWith(file,'/')
+                file=file(1:end-1);
+            end
+            [~,out]=fileparts(file);
+
+        end
+    end
+    function obj=populate_wrk_dir(obj);
         %Make sure that projects in each exist, then symlink
         for i=1:length(obj.Options)
             O=obj.Options{i};
@@ -442,7 +466,7 @@ methods
                     Px.LN(s,obj.curWrk);
                 else
                     bTest=0;
-                    Px.fixlinkifwrong([obj.curWrk name],s,bTest);
+                    Px.fix_link([obj.curWrk name],s,bTest);
                 end
             end
         end
@@ -459,15 +483,36 @@ methods(Static,Access=private)
             dire=dire(1:end-1);
         end
     end
+    function out=rephome(in)
+        if ~ispc()
+            [~,home]=system('echo $HOME');
+            home=strrep(home,newline,'');
+        else
+            home='Y:'; % XXX ADD TO CONFIG
+        end
+        out=strrep(in,'~',home);
+    end
     function out= issymboliclink(dire)
-        out=~unix(['test -L ' dire]);
+        if ispc
+            cmd=['powershell -Command "((get-item ' dire ').Attributes.ToString() -match """ReparsePoint"")"'];
+            [~,islink]=system(cmd);
+            islink=strrep(islink,newline,'');
+            out=strcmp(islink,'True');
+        else
+            out=~unix(['test -L ' dire]);
+        end
     end
     function out = islinkbroken(dire)
         out=~unix(['[[ ! -e ' dire ' ]] && echo 1']);
     end
 
     function out =linksource(dire)
-        if ismac
+        if ispc
+            cmd=['powershell -Command "(Get-Item ' dire ').Target'];
+            [~,src]=system(cmd);
+            out=strrep(src,newline,'');
+            return
+        elseif ismac
             str=['readlink ' dire];
         elseif Px.islinux
             str=['readlink -f ' dire];
@@ -527,39 +572,22 @@ methods(Static,Access=private)
             out=0;
         end
     end
-    function []=fixlinkifwrong(dire,gdSrc,bTest)
+    function []=fix_link(dire,gdSrc,bTest)
         if ~exist('bTest','var') || isempty(bTest)
             bTest=0;
         end
-        if ispc
-            cmd=['powershell -Command "((get-item ' dire ').Attributes.ToString() -match """ReparsePoint"")"'];
-            [~,islink]=system(cmd);
-            islink=strrep(islink,newline,'');
-            islink=strcmp(islink,'True');
+        gdSrc=Px.rephome(gdSrc);
 
-        else
-            islink=Px.issymboliclink(dire);
-        end
+        islink=Px.issymboliclink(dire);
         if islink==0
             error([ 'Unexpected non-symbolic link at ' dire ]);
         end
-        if ispc
-            cmd=['powershell -Command "(Get-Item ' dire ').Target'];
-            [~,src]=system(cmd);
-                src=strrep(src,newline,'');
-        else
-            src=Px.linksource(dire);
-        end
+
+        src=Px.linksource(dire);
         if isnan(src)
             error('Something went wrong');
         end
-        if ~ispc()
-            [~,home]=system('echo $HOME');
-            home=strrep(home,newline,'');
-        else
-            home='Y:'; % XXX
-        end
-        gdSrc=strrep(gdSrc,'~',home);
+
         if ~ispc
             gdSrc=Px.linksource(gdSrc);
         end
