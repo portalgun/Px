@@ -23,6 +23,7 @@ properties
     prjWDir
 end
 properties(Hidden)
+    bEcho
     selfPath
     stableflag
     hostname
@@ -34,7 +35,9 @@ methods
             bStable=0;
         end
         if ~exist('bEcho') || isempty(bEcho)
-            bEcho=1;
+            obj.bEcho=1;
+        else
+            obj.bEcho=bEcho;
         end
         obj.hostname=Px.get_hostname();
         obj.get_self_path();
@@ -96,7 +99,7 @@ methods
 
         obj.cd_prj();
         obj.run_hooks();
-        if bEcho
+        if obj.bEcho
             display('Done.')
         end
     end
@@ -125,7 +128,7 @@ methods
         if ~isempty(obj.root)
             Px.filesepc(obj.root);
         else
-            error('No root directory found in config')
+            error('No root directory found in config');
         end
 
     end
@@ -308,17 +311,36 @@ methods
         end
     end
     function obj=get_prj_options(obj)
-        [obj,exitflag]=obj.get_prj_options_helper(obj.prjconfig);
-        if exitflag==1
-            [obj,exitflag]=obj.get_prj_options_helper(obj.rootconfig);
-        else
+        [obj,exitflag]=obj.get_prj_options_helper(1);
+        if exitflag==1 & obj.bEcho
+            disp(['No project config file found. Checking root config']);
+        elseif isempty(obj.Options)
+            if obj.bEcho
+                disp(['Config file is empty. Checking root config.']);
+            end
+            exitflag=1;
+        end
+
+        if exitflag==0
             return
         end
-        if exitflag==1
-            disp('No config file. Skipping.')
+        [obj,exitflag]=obj.get_prj_options_helper(0);
+
+        if exitflag==1 && obj.bEcho
+            disp('No config file found. Skipping.')
+            obj.Options{1}={obj.prjDir};
+        elseif isempty(obj.Options) && obj.bEcho
+            disp('Config entry does not exist. Skipping.')
+            obj.Options{1}={obj.prjDir};
         end
     end
-    function [obj,exitflag]=get_prj_options_helper(obj,config)
+    function [obj,exitflag]=get_prj_options_helper(obj,bPrjConfig)
+        if bPrjConfig
+            config=obj.prjconfig;
+        else
+            config=obj.rootconfig;
+        end
+
         %function []=pxs(rootPrjDir,rootStbDir,rootTlbxDir)
         %px symbolic links - handle dependencies
         % TODO
