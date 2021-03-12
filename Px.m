@@ -358,7 +358,10 @@ methods
 
         %Section into seperate configs & create full paths
         obj.Options=cell(0);
-        bStart=0; % Indicates valid header has been identified
+        bStart=bPrjConfig; % Indicates valid header has been identified
+        if bPrjConfig
+            obj.Options{1}={obj.prjDir};
+        end
         while true
             tline=fgetl(fid);
 
@@ -369,7 +372,7 @@ methods
             if isempty(tline); continue; end
 
             % No indents indicate new block
-            bNew=~Px.regExp(tline,'^\s');
+            bNew=~bPrjConfig && ~Px.regExp(tline,'^\s');
 
             if ~bNew && ~bStart
                 continue
