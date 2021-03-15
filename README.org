@@ -8,40 +8,31 @@
  ░▒ ░     ░░   ░▒ ░
  ░░        ░    ░
            ░    ░
- [rootPrjDir,rootStbDir,rootTlbxDir,rootHookDir]=px(prj,bStable,bVarsOnly)
 
  Project Switcher
-    Manages your Matlab project paths dynamically and with ease
-    Inspired by toolboxtoolbox
+    Manages your Matlab project paths dynamically and with ease.
 
- example call:
-           px
-           (then return a number corresponding to a project)
+ example calls:
+           px %(then return a number corresponding to a project)
+
+           px(prjName) % to swith to project
+
+           pxr % to reload current project 
 
  SETUP INSTRUCTIONS:
     1. PLACE BELOW IN YOUR STARTUP FILE
-          pxPath='/some/path/to/this/file'
-          run(pxPath)
-    2. SET THESE VARIABLES BELOW
-       rootPrjDir
-          Specifies a directory where all your projects will be
-       rootTlbxDir
-          Specifies a directory where toolboxes are located
-          Toolboxes will always load with all projects, but projects given priority
+          pxPath='/some/path/to/this/file';
+          run(pxPath);
+    2. SET UP CONFIG FILE 
+          See _config_.example
 
-    Optional variables:
-       rootStbDir
-          Specifies a directory where all your projects will be
-       rootHookDir
-          Specifies a directory where project hooks are located
-          To create a hook, create a .m file with the same name as the project directory
+ Directories
+    "root"                The root directory for everything else below.  Specified in first line of config file.
+    projects/             Root project directory where projects under development go.
+    stableProjects/       Root project directory where stable projects go. 
+    workspaces/           This is where a virtual isolated directory will be created for your project on load, with all dependencies. 
+    stableWorkspaces/     Same as above, but for stable projects 
+    toolboxes/            Anything in this directory will always be added to your path.
+    localHooks/           Any matlab function in this directory with the same name as a project will run after Px finishes loading that project
 
-          Hook can be script or function. If function, can px will return one of its outputs as 'out'
-
-     Set per project dependencies
-          In project directory create .px file
-          d:projectName - development
-          s:projectName - stable
-          e:toolboxName - exclude a particular toolbox
-          eAll:
-#+ENDSRC
+#+END_SRC

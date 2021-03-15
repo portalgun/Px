@@ -1,0 +1,74 @@
+- recursive dependencies
+- get home directory in windows
+- setup
+    bHistory
+    create config
+    install in startup file
+    uninstall from startup file
+
+- default root should be ../
+- i option (???) - ignore toolbox
+- libraries directory l:
+- make stable m files read only
+- do gtags within workspaces
+- link toolboxes if marked as such in config
+- +modules?
+
+* GIT
+- checkout hash
+- get current hash
+- add git tag/branch option
+
+[prjtype]:[directory]:[hash/tag]:[url]
+  prjtype - 1 letter code
+directory - starts with . or /
+url       - has periods not at start
+if directory empty
+    checkout
+    put it into lib
+if hash/tag empty
+    assume master
+          put into config
+
+
+get rid of stable directories, just name them differently
+    prj__hash
+* History  NOTES
+%com.mathworks.mlservices.MLCommandHistoryServices.getAllHistory
+%com.mathworks.mlservices.MLCommandHistoryServices.getSessionHistory
+%com.mathworks.mlservices.MLCommandHistoryServices.add(string)
+% removeall
+% save
+% getSessionHistory
+%com.mathworks.ide.cmdline.CommandHistory.deleteAllHistoryForDesktop;
+%com.mathworks.mlservices.MLCommandHistoryServices.
+%com.mathworks.mlservices.MLExecuteServices.consoleEval
+
+history option
+
+
+com.mathworks.mde.cmdhist.CmdHistory.getInstance
+com.mathworks.mde.cmdhist.AltHistory.getInstance()
+com.mathworks.mde.cmdhist.AltHistory.getRecalledCommands
+
+import java.io.File
+
+
+file = new File(com.mathworks.util.FileUtils.getPreferencesDirectory , "History.xml");
+
+<command batch="true" repeat="2 error="true" "execution_time="" ></command>
+<command time_stamp"">>%-- 05/13/2020 03:42:37 PM --%</command>
+
+# run commmand, add to history
+com.mathworks.mlservices.MLExecuteServices.executeCommand('')
+# run command, do not add to history
+com.mathworks.mlservices.MLExecuteServices.consoleEval('')
+
+# add to history
+com.mathworks.mlservices.MLCommandHistoryServices.add('px')
+?exec time
+?repeat
+?error
+?batch
+
+
