@@ -1,16 +1,38 @@
-- get home directory windows
+- recursive dependencies
+- get home directory in windows
 - setup
-    matlabinstalldirectory
+    bHistory
     create config
-    ask for startup file
-    ask to scan dirs
+    install in startup file
+    uninstall from startup file
 
+- default root should be ../
 - i option (???) - ignore toolbox
 - libraries directory l:
 - make stable m files read only
 - do gtags within workspaces
 - link toolboxes if marked as such in config
 - +modules?
+
+* GIT
+- checkout hash
+- get current hash
+- add git tag/branch option
+
+[prjtype]:[directory]:[hash/tag]:[url]
+  prjtype - 1 letter code
+directory - starts with . or /
+url       - has periods not at start
+if directory empty
+    checkout
+    put it into lib
+if hash/tag empty
+    assume master
+          put into config
+
+
+get rid of stable directories, just name them differently
+    prj__hash
 * History  NOTES
 %com.mathworks.mlservices.MLCommandHistoryServices.getAllHistory
 %com.mathworks.mlservices.MLCommandHistoryServices.getSessionHistory
@@ -50,23 +72,3 @@ com.mathworks.mlservices.MLCommandHistoryServices.add('px')
 ?batch
 
 
-
-* GIT
-- checkout hash
-- get current hash
-- add git tag/branch option
-
-[prjtype]:[directory]:[hash/tag]:[url]
-  prjtype - 1 letter code
-directory - starts with . or /
-url       - has periods not at start
-if directory empty
-    checkout
-    put it into lib
-if hash/tag empty
-    assume master
-          put into config
-
-
-get rid of stable directories, just name them differently
-    prj__hash

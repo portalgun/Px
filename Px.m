@@ -3,7 +3,7 @@ properties
     root
     %root='~/Code/mat/'
     rootWrkDir
-    rootSWrkdir
+    rootSWrkDir
     rootPrjDir
     rootStbDir
     rootTlbxDir
@@ -31,6 +31,9 @@ properties(Hidden)
     curWrk
     matroot
 end
+properties(Constant)
+    sep=';';
+end
 methods
     function obj=Px(prj,bStable,bEcho)
         if ~exist('bStable','var') || isempty(bStable)
@@ -50,10 +53,10 @@ methods
             obj.setup();
         end
 
-        obj.get_root_dir();
+        obj.get_root_configs();
         obj.get_dirs();
         addpath(obj.selfPath);
-        if ~isempty(prj) && (isnumeric(prj) || strcmp(prj,'_0_'))
+        if exist('prj','var') && ~isempty(prj) && (isnumeric(prj) || strcmp(prj,'_0_'))
             prj=Px.get_current();
         end
 
@@ -103,6 +106,7 @@ methods
 
         obj.cd_prj();
 
+        obj.bHistory
         if obj.bHistory
             obj.make_history();
         end
@@ -114,23 +118,37 @@ methods
     end
     function obj=setup(obj)
     end
-    function obj=get_root_dir(obj)
+    function obj=get_root_configs(obj)
         fid = fopen(obj.rootconfig);
         while true
             line=fgetl(fid);
             if ~ischar(line); break; end
-            if Px.regExp(line,'^[Rr]oot')
-                spl=strsplit(line,':');
-                spl(cellfun(@isempty,spl))=[];
 
-                if length(spl) == 1
-                    continue
-                elseif length(spl) == 2 && exist(spl{2},'dir')
-                    obj.root=spl{2};
-                elseif length(spl) == 3 && strcmp(spl{2},obj.hostname) && exist(spl{3},'dir')
-                    obj.root=spl{3};
-                    break
-                end
+            if Px.regExp(line,'^[Rr]oot;')
+                c='root';
+            elseif Px.regExp(line,'^[Hh]istory')
+                c='bHistory';
+            elseif Px.regExp(line,'^rootWrkDir')
+                c='rootWrkDir';
+            elseif Px.regExp(line,'^rootSWrkDir')
+                c='rootSWrkDir';
+            else
+                continue
+            end
+            spl=strsplit(line,Px.sep);
+            spl(cellfun(@isempty,spl))=[];
+
+            if length(spl) == 1
+                continue
+            elseif length(spl) == 2 && exist(spl{2},'dir')
+                obj.(c)=spl{2};
+            elseif length(spl) == 3 && strcmp(spl{2},obj.hostname)
+                obj.(c)=spl{3};
+            else
+                continue
+            end
+            if Px.regExp(obj.(c),'[0-9]+');
+                obj.(c)=str2double(obj.(c));
             end
         end
         fclose(fid);
@@ -233,8 +251,8 @@ methods
         if isempty(obj.rootWrkDir)
             obj.rootWrkDir ='workspaces';
         end
-        if isempty(obj.rootSWrkdir)
-            obj.rootSWrkdir='stableWorkspaces';
+        if isempty(obj.rootSWrkDir)
+            obj.rootSWrkDir='stableWorkspaces';
         end
         if isempty(obj.rootPrjDir)
             obj.rootPrjDir ='projects';
@@ -251,7 +269,7 @@ methods
 
         prps={ ...
              ,'rootWrkDir' ...
-             ,'rootSWrkdir' ...
+             ,'rootSWrkDir' ...
              ,'rootPrjDir' ...
              ,'rootStbDir' ...
              ,'rootTlbxDir' ...
@@ -269,12 +287,9 @@ methods
 
         if ispc
             % XXX MOVE
-            obj.rootWrkDir=strrep(obj.rootWrkDir,'~\Code\mat','E:\matenv');
-            obj.rootSWrkdir=strrep(obj.rootStbDir,'~\Code\mat','E:\matenv');
-            obj.rootPrjDir =strrep(obj.rootPrjDir,'~\Code','Y:');
-            obj.rootStbDir=strrep(obj.rootStbDir,'~\Code','Y:');
-            obj.rootTlbxDir=strrep(obj.rootTlbxDir,'~\Code','Y:');
-            obj.rootHookDir=strrep(obj.rootHookDir,'~\Code','Y:');
+            %obj.rootWrkDir=strrep(obj.rootWrkDir,'~\Code\mat','E:\matenv');
+            %obj.rootSWrkDir=strrep(obj.rootSWrkDir,'~\Code\mat','E:\matenv');
+            obj.rootWrkDir
 
         end
     end
@@ -310,7 +325,7 @@ methods
         %CHANGE DIRECTORY TO PROJECT DIRECTORY
         if obj.stableflag==1 && ~strcmp(obj.prj,'_0_')
             obj.prjDir=[obj.rootStbDir obj.prj filesep];
-            obj.prjWDir=[obj.rootSWrkdir obj.prj filesep];
+            obj.prjWDir=[obj.rootSWrkDir obj.prj filesep];
         elseif ~strcmp(obj.prj,'_0_')
             obj.prjDir=([obj.rootPrjDir obj.prj filesep]);
             obj.prjWDir=[obj.rootWrkDir obj.prj filesep];
@@ -449,6 +464,7 @@ methods
         if bPrjConfig
             obj.Options{1}={obj.prjDir};
         end
+        configs={'root','history'};
         while true
             tline=fgetl(fid);
 
@@ -459,7 +475,7 @@ methods
             if isempty(tline); continue; end
 
             % No indents indicate new block
-            bNew=~bPrjConfig && ~Px.regExp(tline,'^\s');
+            bNew=~bPrjConfig && ~Px.regExp(tline,'^\s') && ~startsWith(tline,configs);
 
             if ~bNew && ~bStart
                 continue
@@ -477,7 +493,7 @@ methods
                 return
             end
             bStart=1;
-            [a,b]=Px.strip_fun(tline); % a = s,d,e
+            [a,b]=Px.strip_fun(tline,Px.sep); % a = s,d,e
             dest=Px.sort_fun(a,b,obj.rootPrjDir,obj.rootStbDir,obj.hostname);
             if isempty(dest)
                 return
@@ -489,7 +505,7 @@ methods
             end
         end
         function obj=get_body(obj,tline)
-            [a,b]=Px.strip_fun(tline);
+            [a,b]=Px.strip_fun(tline,Px.sep);
             dest=Px.sort_fun(a,b,obj.rootPrjDir,obj.rootStbDir,obj.hostname);
             if isempty(dest)
                 return
@@ -499,7 +515,7 @@ methods
     end
     function obj=make_wrk_dir(obj)
         if obj.stableflag==1
-            obj.curWrk=[obj.rootSWrkdir obj.prj filesep];
+            obj.curWrk=[obj.rootSWrkDir obj.prj filesep];
         else
             obj.curWrk=[obj.rootWrkDir obj.prj filesep];
         end
@@ -512,6 +528,9 @@ methods
         obj.populate_wrk_dir();
     end
     function obj=rm_removed_symlinks(obj)
+        if isempty(obj.Options)
+            return
+        end
         deps=obj.Options{1};
         deps=cellfun(@get_name_fun,deps,'UniformOutput',false);
 
@@ -549,6 +568,8 @@ methods
                 end
                 [~,name]=fileparts(s(1:end-1));
                 s=s(1:end-1);
+                
+                %if (~ispc && ~exist([obj.curWrk name],'dir')) || (ispc && ~exist([obj.curWrk name],'file'))
                 if ~exist([obj.curWrk name],'dir')
                     Px.LN(s,obj.curWrk);
                 else
@@ -563,8 +584,8 @@ methods(Static,Access=private)
     function dire=filesepc(dire)
         %function dire=filesepc(dire)
         %adds filesep to end if it doesn't already exist
-        strrep(dire,'/',filesep);
-        if ~strcmp(dire(end),filesep)
+        dire=strrep(dire,'/',filesep);
+        if ~endsWith(dire,filesep)
             dire=[dire filesep];
         elseif strcmp(dire(end),filesep) && strcmp(dire(end-1),filesep)
             dire=dire(1:end-1);
@@ -581,7 +602,7 @@ methods(Static,Access=private)
     end
     function out= issymboliclink(dire)
         if ispc
-            cmd=['powershell -Command "((get-item ' dire ').Attributes.ToString() -match """ReparsePoint"")"'];
+            cmd=['powershell -Command "((Get-Item ' dire ' -Force -ea SilentlyContinue).Attributes)'] %;-band [IO.FileAttributes]::ReparsePoint)"'];
             [~,islink]=system(cmd);
             islink=strrep(islink,newline,'');
             out=strcmp(islink,'True');
@@ -641,10 +662,10 @@ methods(Static,Access=private)
         elseif ~iscell(cell)
             out=~isempty(regexp(cell,exp,'ignorecase'));
         elseif bIgnoreCase==1
-            out=~cell2mat(cellfun( @(x) isempty(regexp(x,exp,'ignorecase')),cell,'UniformOutput',false)');
+            out=~cell2mat(transpose(cellfun( @(x) isempty(regexp(x,exp,'ignorecase')),cell,'UniformOutput',false)));
         else
 
-            out=~cell2mat(cellfun( @(x) isempty(regexp(x,exp)),cell,'UniformOutput',false)');
+            out=~cell2mat(transpose(cellfun( @(x) isempty(regexp(x,exp)),cell,'UniformOutput',false)));
         end
     end
     function hn = get_hostname()
@@ -691,8 +712,8 @@ methods(Static,Access=private)
     function out=touch(fname)
         out=fclose(fopen(fname,'w'));
     end
-    function [a,b]=strip_fun(tline)
-        [a,b]=strtok(tline,':');
+    function [a,b]=strip_fun(tline,sep)
+        [a,b]=strtok(tline,sep);
         a=a(end);
         b=b(2:end);
         b=Px.filesepc(b);
