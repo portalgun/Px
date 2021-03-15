@@ -1,0 +1,72 @@
+#example config;
+#  Top 'root' line is the only requirement
+#  each block entry begins with a header, which specifies a project
+#  Indented items below the header specify depencdencies.
+#  Each project and dependency is prefixed with with a letter
+#       d -> develop, located in the 'projects' directory
+#       s -> develop, located in the 'stableProjects' directory
+#       e -> external, something outside the Px project higherarchy
+#  A middle optional hostname parameter allows for different configurations across multiple machines.
+#      eg.
+#          |d;DSP
+#          |    e;DaveComputer;E;\Psychtoolbox
+#          |    e;DaveComputer2;/home/dave/src/Psychtoolbox
+#          Here, if I'm on the computer with hostnaem BONICH, I would load Psychtoolbox from E;\Psychtoolbox
+#          If I'm on the computer with hostnaem BONICE, I would load Psychtoolbox from /home/dave/src/Psychtoolbox
+#  These also can apply to any 'root' option.
+#  Currently supported root options are:
+#       root        - see above
+#       rootWrkDir  - project working directory (need to change if using a network drive from a computer that is also integrated with Px)
+#       rootSWrkDir - same, but for stable projects
+#       history     - 0 or 1 -> specifies whether to manage matlab command history by project
+#
+#  Additionally indvidiual project configurations can be read from the project directory. 
+#  Just create a file in that directory called .px and put in project specific configuration as below, but the header and indentation is not required. 
+#  Root options will not be read from these files.  
+#  .px files will also take preference over root configuration.
+#
+root;DaveComputer;/home/dave/Code/mat/
+root;DaveComputer2;E;\matenv\
+history;DaveComputer2;0
+
+d;depthProbeAdjust
+    d;expVariables
+    d;halfOccCollab
+    d;stimulusDemo
+
+d;Hocc
+    d;expVariables/DVN
+
+s;DPA
+    s;expVariables
+    s;halfOccCollab
+    s;stimulusDemo
+
+d;DSP
+    s;expVariables
+    d;psyPlots
+    d;psycho
+    e;DaveComputer;E;\Psychtoolbox
+    e;DaveComputer2;/home/dave/src/Psychtoolbox
+    e;example.com;/Applications/Psychtoolbox
+    e;example.com;/Users/Shared/VPixx_Software_Tools
+
+d;DSP2
+    d;imap
+    e;DaveComputer;E;\Psychtoolbox
+    e;DaveComputer;/home/dave/src/Psychtoolbox
+    e;example.com;/Applications/Psychtoolbox
+    e;example.com;/Users/Shared/VPixx_Software_Tools
+    d;psycho
+
+d;imap
+    e;BONICH;E;\Psychtoolbox
+    e;BONICE;/home/dave/src/Psychtoolbox
+    d;PctrSmp
+    d;Patch
+
+d;psycho
+    e;example.com;/Users/Shared/VPixx_Software_Tools
+    e;example.com;/Applications/Psychtoolbox
+    e;DaveComputer2;E;\Psychtoolbox
+    e;DaveComptuer;/home/dave/src/Psychtoolbox
