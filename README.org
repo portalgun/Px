@@ -10,7 +10,7 @@
            ░    ░
 
  Project Switcher
-    Manages your Matlab project paths dynamically and with ease.
+    Manages your Matlab project paths and dependencies with ease.
 
  example calls:
            px %(then return a number corresponding to a project)
@@ -24,7 +24,7 @@
           pxPath='/some/path/to/this/file';
           run(pxPath);
     2. SET UP CONFIG FILE 
-          See _config_.example
+          See .config.example
 
  Directories
     "root"                The root directory for everything else below.  Specified in first line of config file.
@@ -34,5 +34,15 @@
     stableWorkspaces/     Same as above, but for stable projects 
     toolboxes/            Anything in this directory will always be added to your path.
     localHooks/           Any matlab function in this directory with the same name as a project will run after Px finishes loading that project
+
+Features: 
+    Host specific configuration
+    Project specific configuration
+    Hooks
+    By-project matlab history management
+
+Features to come:
+    Git integration
+    More minimal setup
 
 #+END_SRC
