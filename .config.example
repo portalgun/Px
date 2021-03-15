@@ -1,0 +1,58 @@
+#example config:
+#  TOP 'root' line is the only requirement
+#  each block entry begins with a header, which specifies a project
+#  Indented items below the header specify depencdencies.
+#  Each project and dependency is prefixed with with a letter
+#       d -> develop, located in the 'projects' directory
+#       s -> develop, located in the 'stableProjects' directory
+#       e -> external, something outside the Px project higherarchy
+#  A third optional hostname parameter allows for different configurations across multiple machines.
+#      eg.
+#          |d:DSP
+#          |    e:BONICH:E:\Psychtoolbox
+#          |    e:BONICE:/home/dambam/src/Psychtoolbox
+#          Here, if I'm on the computer with hostnaem BONICH, I would load Psychtoolbox from E:\Psychtoolbox
+#          If I'm on the computer with hostnaem BONICE, I would load Psychtoolbox from /home/dambam/src/Psychtoolbox
+root:/home/dambam/Code/mat/
+
+d:depthProbeAdjust
+    d:expVariables
+    d:halfOccCollab
+    d:stimulusDemo
+
+d:Hocc
+    d:expVariables/DVN
+
+s:DPA
+    s:expVariables
+    s:halfOccCollab
+    s:stimulusDemo
+
+d:DSP
+    s:expVariables
+    d:psyPlots
+    d:psycho
+    e:BONICH:E:\Psychtoolbox
+    e:BONICE:/home/dambam/src/Psychtoolbox
+    e:jburge-wheatstone.psych.upenn.edu:/Applications/Psychtoolbox
+    e:jburge-wheatstone.psych.upenn.edu:/Users/Shared/VPixx_Software_Tools
+
+d:DSP2
+    d:imap
+    e:BONICH:E:\Psychtoolbox
+    e:BONICE:/home/dambam/src/Psychtoolbox
+    e:jburge-wheatstone.psych.upenn.edu:/Applications/Psychtoolbox
+    e:jburge-wheatstone.psych.upenn.edu:/Users/Shared/VPixx_Software_Tools
+    d:psycho
+
+d:imap
+    e:BONICH:E:\Psychtoolbox
+    e:BONICE:/home/dambam/src/Psychtoolbox
+    d:PctrSmp
+    d:Patch
+
+d:psycho
+    e:jburge-wheatstone.psych.upenn.edu:/Users/Shared/VPixx_Software_Tools
+    e:jburge-wheatstone.psych.upenn.edu:/Applications/Psychtoolbox
+    e:BONICH:E:\Psychtoolbox
+    e:BONICE:/home/dambam/src/Psychtoolbox
