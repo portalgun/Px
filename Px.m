@@ -16,7 +16,7 @@ properties
     prj
     tlbxs
 
-    Options
+    Options  % 1 - paths
     rootconfig
     prjconfig
     prjDir
@@ -88,6 +88,7 @@ methods
         addpath(obj.selfPath);
 
         obj.get_prj_options();
+        obj.Options.add
         obj.make_wrk_dir();
         obj.parse_prj_options();
 
@@ -432,10 +433,10 @@ methods
 
         if exitflag==1 && obj.bEcho
             disp('No config file found. Skipping.')
-            obj.Options{1}={obj.prjDir};
+            obj.Options(1).prj=obj.prjDir;
         elseif isempty(obj.Options) && obj.bEcho
             disp('Config entry does not exist. Skipping.')
-            obj.Options{1}={obj.prjDir};
+            obj.Options(1).prj=obj.prjDir;
         end
     end
     function [obj,exitflag]=get_prj_options_helper(obj,bPrjConfig)
@@ -461,10 +462,15 @@ methods
         fid=fopen(config);
 
         %Section into seperate configs & create full paths
-        obj.Options=cell(0);
+        obj.Options=struct();
+        obj.Options.prj='';
+        obj.Options.add=cell(0,1);
+        obj.Options.rm=cell(0,1);
+
         bStart=bPrjConfig; % Indicates valid header has been identified
         if bPrjConfig
-            obj.Options{1}={obj.prjDir};
+            obj.Options(1).prj=obj.prjDir;
+            obj.Options(1).add{1,1}=obj.prjDir;
         end
         configs={'root','history'};
         while true
@@ -496,23 +502,26 @@ methods
             end
             bStart=1;
             [code,dire,host,version]=Px.strip_fun(tline,Px.sep,obj.PRJS,obj.sprjs); % a = s,d,e
-            dest=Px.sort_fun(code,dire,host,version,obj.rootPrjDir,obj.rootStbDir,obj.hostname);
+            [dest,rdest]=Px.sort_fun(code,dire,host,version,obj.rootPrjDir,obj.rootStbDir,obj.hostname);
             if isempty(dest)
                 return
             end
             if isempty(obj.prj) || (strcmp(obj.prj,dire(1:end-1)) && ((obj.stableflag==1 && code=='s') || ((obj.stableflag==0 && code=='d'))))
-                obj.Options{end+1}{1}=dest;
+                obj.Options(end+1).prj=dest;
+                obj.Options(end).add{1,1}=dest;
             else
                 bStart=0;
             end
+
         end
         function obj=get_body(obj,tline)
             [code,dire,host,version]=Px.strip_fun(tline,Px.sep,obj.PRJS,obj.sprjs);
-            dest=Px.sort_fun(code,dire,host,version,obj.rootPrjDir,obj.rootStbDir,obj.hostname);
-            if isempty(dest)
-                return
+            [dest,rdest]=Px.sort_fun(code,dire,host,version,obj.rootPrjDir,obj.rootStbDir,obj.hostname);
+            if ~isempty(dest)
+                obj.Options(end).add{end+1,1}=dest;
+            elseif ~isempty(rdest)
+                obj.Options(end).rm{end+1,1}=dest;
             end
-            obj.Options{end}{end+1}=dest;
         end
     end
     function obj=make_wrk_dir(obj)
@@ -533,13 +542,13 @@ methods
         if isempty(obj.Options)
             return
         end
-        deps=obj.Options{1};
+        deps=obj.Options(1).add;
         deps=cellfun(@get_name_fun,deps,'UniformOutput',false);
 
         dirs=dir(obj.curWrk);
         name=transpose({dirs.name});
         full=join([transpose({dirs.folder}) name],filesep);
-        ind=vertcat(dirs.isdir) & ~ismember(name,[{'.','..'}, deps]);
+        ind=vertcat(dirs.isdir) & ~ismember(name,[{'.'; '..'}; deps]);
         rmdirs=full(ind);
         for i = 1:length(rmdirs)
             delete(rmdirs{i}); % works with symlinks
@@ -556,14 +565,14 @@ methods
     function obj=populate_wrk_dir(obj);
         %Make sure that projects in each exist, then symlink
         for i=1:length(obj.Options)
-            O=obj.Options{i};
-            m=O{1}; %main project directory
+            O=obj.Options(i);
+            m=O.prj; %main project directory
             if ~exist(m,'dir')
                 disp(['Directory ' m ' does not exist']);
                 continue
             end
-            for j = 1:length(O)
-                s=O{j}; %dependencies
+            for j = 1:length(O.add)
+                s=O.add{j}; %dependencies
                 if ~exist(s,'dir')
                     disp(['Directory ' s ' does not exist']);
                     continue
@@ -737,8 +746,9 @@ methods(Static,Access=private)
         end
     end
 
-    function dest=sort_fun(code,dire,host,version,rootPrjDir,rootStbDir,hostname)
+    function [dest,rdest]=sort_fun(code,dire,host,version,rootPrjDir,rootStbDir,hostname)
         dest=[];
+        rdest=[];
         if ~isempty(host) && ~strcmp(host,hostname)
             return
         end
@@ -750,6 +760,8 @@ methods(Static,Access=private)
                 dest=[rootPrjDir dire];
             case 'e'
                 dest=dire;
+            case 'i'
+                rdest=dire;
         end
         est=Px.filesepc(dest);
     end
