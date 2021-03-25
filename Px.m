@@ -88,7 +88,6 @@ methods
         addpath(obj.selfPath);
 
         obj.get_prj_options();
-        obj.Options.add
         obj.make_wrk_dir();
         obj.parse_prj_options();
 
@@ -98,6 +97,7 @@ methods
 
         %GETTOOLBOXES
         obj.tlbxs=Px.getProjects(obj.rootTlbxDir,1);
+        obj.tlbxs(ismember(obj.tlbxs,obj.Options.rm))=[];
 
         %ADD DEPENDENCIES/REMOVE EXLUDED TOOLBOXES
         % XXX
