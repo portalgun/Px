@@ -30,6 +30,8 @@ properties(Hidden)
     hostname
     curWrk
     matroot
+    PRJS
+    SPRJS
 end
 properties(Constant)
     sep=';';
@@ -59,6 +61,9 @@ methods
         if exist('prj','var') && ~isempty(prj) && (isnumeric(prj) || strcmp(prj,'_0_'))
             prj=Px.get_current();
         end
+
+        obj.sprjs=Px.getProjects(obj.rootStbDir);
+        obj.PRJS =Px.getProjects(obj.rootPrjDir);
 
         if ~exist('prj','var') || isempty(prj)
             obj.get_prjs(bStable);
@@ -106,7 +111,6 @@ methods
 
         obj.cd_prj();
 
-        obj.bHistory
         if obj.bHistory
             obj.make_history();
         end
@@ -295,14 +299,12 @@ methods
     end
     function obj=get_prjs(obj,bStable)
         if bStable
-            obj.prjs=Px.getProjects(obj.rootStbDir);
+            obj.prjs=obj.sprjs;
         else
-            obj.prjs=Px.getProjects(obj.rootPrjDir);
+            obj.prjs=obj.PRJS;
         end
         obj.prjs(ismember(obj.prjs,obj.ignoreDirs))=[];
-        obj.sprjs=Px.getProjects(obj.rootStbDir);
         obj.sprjs(ismember(obj.sprjs,obj.ignoreDirs))=[];
-
     end
     function obj=disp_prjs(obj)
         disp([newline '  r last open project']);
@@ -493,20 +495,20 @@ methods
                 return
             end
             bStart=1;
-            [a,b]=Px.strip_fun(tline,Px.sep); % a = s,d,e
-            dest=Px.sort_fun(a,b,obj.rootPrjDir,obj.rootStbDir,obj.hostname);
+            [code,dire,host,version]=Px.strip_fun(tline,Px.sep,obj.PRJS,obj.sprjs); % a = s,d,e
+            dest=Px.sort_fun(code,dire,host,version,obj.rootPrjDir,obj.rootStbDir,obj.hostname);
             if isempty(dest)
                 return
             end
-            if isempty(obj.prj) || (strcmp(obj.prj,b(1:end-1)) && ((obj.stableflag==1 && a=='s') || ((obj.stableflag==0 && a=='d'))))
+            if isempty(obj.prj) || (strcmp(obj.prj,dire(1:end-1)) && ((obj.stableflag==1 && code=='s') || ((obj.stableflag==0 && code=='d'))))
                 obj.Options{end+1}{1}=dest;
             else
                 bStart=0;
             end
         end
         function obj=get_body(obj,tline)
-            [a,b]=Px.strip_fun(tline,Px.sep);
-            dest=Px.sort_fun(a,b,obj.rootPrjDir,obj.rootStbDir,obj.hostname);
+            [code,dire,host,version]=Px.strip_fun(tline,Px.sep,obj.PRJS,obj.sprjs);
+            dest=Px.sort_fun(code,dire,host,version,obj.rootPrjDir,obj.rootStbDir,obj.hostname);
             if isempty(dest)
                 return
             end
@@ -712,32 +714,44 @@ methods(Static,Access=private)
     function out=touch(fname)
         out=fclose(fopen(fname,'w'));
     end
-    function [a,b]=strip_fun(tline,sep)
-        [a,b]=strtok(tline,sep);
-        a=a(end);
-        b=b(2:end);
-        b=Px.filesepc(b);
+    function [code,dire,host,version]=strip_fun(tline,sep,prjs,sprjs)
+        code=[];
+        dire=[];
+        host=[];
+        version=[];
+        strs=strsplit(tline,sep);
+
+
+        bVers=0;
+        for i = 1:length(strs)
+            str=strs{i};
+            if ischar(str) && numel(str)==1
+                code=str;
+            elseif ismember(filesep,str) || ismember(str,[prjs sprjs])
+                dire=Px.filesepc(str);
+            elseif i==2
+                host=str;
+            elseif ismember(i,[3,4])
+                version=str;
+            end
+        end
     end
 
-    function dest=sort_fun(a,b,rootPrjDir,rootStbDir,hostname)
-        switch a
+    function dest=sort_fun(code,dire,host,version,rootPrjDir,rootStbDir,hostname)
+        dest=[];
+        if ~isempty(host) && ~strcmp(host,hostname)
+            return
+        end
+
+        switch code
             case 's'
-                dest=[rootStbDir b];
+                dest=[rootStbDir dire];
             case 'd'
-                dest=[rootPrjDir b];
+                dest=[rootPrjDir dire];
             case 'e'
-                [b,c]=strtok(b,':');
-                c=c(2:end);
-                if strcmp(hostname,b)
-                    dest=c;
-                else
-                    dest=[];
-                    return
-                end
+                dest=dire;
         end
-        if ~strcmp(dest(end),filesep)
-            dest=[dest filesep];
-        end
+        est=Px.filesepc(dest);
     end
     function lines=file2cell(fname)
         fid = fopen(fname);
