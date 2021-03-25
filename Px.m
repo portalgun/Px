@@ -1,4 +1,6 @@
 classdef Px < handle
+% dos/unix        40%  36      getlinksource(19) LN(4)
+% history_fun    .48%  3
 properties
     root
     %root='~/Code/mat/'
@@ -32,6 +34,7 @@ properties(Hidden)
     matroot
     PRJS
     SPRJS
+    home
 end
 properties(Constant)
     sep=';';
@@ -49,6 +52,7 @@ methods
 
 
         obj.hostname=Px.get_hostname();
+        obj.home=Px.gethome();
         obj.get_self_path();
         obj.rootconfig=[obj.selfPath '.config'];
         if ~exist(obj.rootconfig,'file')
@@ -57,7 +61,6 @@ methods
 
         obj.get_root_configs();
         obj.get_dirs();
-        addpath(obj.selfPath);
         if exist('prj','var') && ~isempty(prj) && (isnumeric(prj) || strcmp(prj,'_0_'))
             prj=Px.get_current();
         end
@@ -84,31 +87,25 @@ methods
 
         obj.save_cur_prj();
 
-        restoredefaultpath;
-        addpath(obj.selfPath);
+        %restoredefaultpath;
+        cd(obj.selfPath);
 
         obj.get_prj_options();
         obj.make_wrk_dir();
         obj.parse_prj_options();
 
-
-        Px.addToPath(obj.prjWDir);
-
-
         %GETTOOLBOXES
         obj.tlbxs=Px.getProjects(obj.rootTlbxDir,1);
         obj.tlbxs(ismember(obj.tlbxs,obj.Options.rm))=[];
-
-        %ADD DEPENDENCIES/REMOVE EXLUDED TOOLBOXES
-        % XXX
-        %tlbxs = parseSettings(prj,rootPrjDir,rootStbDir,tlbxs)
+        obj.tlbxs(ismember(obj.tlbxs,obj.prj))=[];
 
         %ADD TOOLBOXES IF NOT ADDED ALREADY, UNLESS EXCLUDED
-        for i = 1:length(obj.tlbxs)
-            if ~strcmp(obj.prj,obj.tlbxs{i})
-               Px.addToPath([obj.rootTlbxDir obj.tlbxs{i}]);
-            end
-        end
+
+        defpath=Px.get_default_path();
+        t=strcat(obj.rootTlbxDir,obj.tlbxs);
+        pathlist=transpose({obj.selfPath obj.prjWDir t{:}});
+
+        obj.add_path(pathlist,defpath);
 
         obj.cd_prj();
 
@@ -183,14 +180,14 @@ methods
         function history_fun(name,prjdir,mdir)
             pHist=[prjdir '.' name];
             mHist=[mdir name];
-            if ~exist(mHist,'file')
+            if ~exist(mHist,'file') % XXX SLOW 1
                 error(['History file ' name 'does not exist']);
             end
-            if ~exist(pHist,'file')
+            if ~exist(pHist,'file') % XXX SLOW 5
                 Px.touch(pHist);
             end
-            bSym=Px.issymboliclink(mHist);
-            if bSym && strcmp(Px.linksource(mHist),pHist);
+            bSym=Px.issymboliclink(mHist); % XXX SLOW 3
+            if bSym && strcmp(Px.getlinksource(mHist),pHist); % XXX SLOW 2
                 return
             elseif bSym
                 delete(mHist);
@@ -198,7 +195,7 @@ methods
                 movefile(mHist,[mHist '_bak']);
             end
 
-            Px.LN(pHist,mHist);
+            Px.LN(pHist,mHist); % XXX SLOW 4
 
 
         end
@@ -379,12 +376,16 @@ methods
     end
     function obj=save_cur_prj(obj)
         % TODO different for PC
-        if obj.stableflag==1
-            cmd=['echo s:' obj.prj ' > ' obj.selfPath '.current_project'];
+        if ispc
+            %system(cmd);
         else
-            cmd=['echo ' obj.prj ' > ' obj.selfPath '.current_project'];
+            if obj.stableflag==1
+                cmd=['echo s:' obj.prj ' > ' obj.selfPath '.current_project'];
+            else
+                cmd=['echo ' obj.prj ' > ' obj.selfPath '.current_project'];
+            end
+            unix(cmd);
         end
-        system(cmd);
     end
     function obj=run_hooks(obj)
         if exist([obj.rootHookDir obj.prj '.m'])==2
@@ -585,7 +586,7 @@ methods
                     Px.LN(s,obj.curWrk);
                 else
                     bTest=0;
-                    Px.fix_link([obj.curWrk name],s,bTest);
+                    Px.fix_link([obj.curWrk name],s,bTest,obj.home);
                 end
             end
         end
@@ -602,14 +603,13 @@ methods(Static,Access=private)
             dire=dire(1:end-1);
         end
     end
-    function out=rephome(in)
-        if ~ispc()
-            [~,home]=system('echo $HOME');
+    function home=gethome()
+        if islinux()
+            [~,home]=unix('echo $HOME');
             home=strrep(home,newline,'');
         else
             home='Y:'; % XXX ADD TO CONFIG
         end
-        out=strrep(in,'~',home);
     end
     function out= issymboliclink(dire)
         if ispc
@@ -617,6 +617,8 @@ methods(Static,Access=private)
             [~,islink]=system(cmd);
             islink=strrep(islink,newline,'');
             out=strcmp(islink,'True');
+        elseif Px.islinux
+            out=issymlink(dire);
         else
             out=~unix(['test -L ' dire]);
         end
@@ -625,7 +627,7 @@ methods(Static,Access=private)
         out=~unix(['[[ ! -e ' dire ' ]] && echo 1']);
     end
 
-    function out =linksource(dire)
+    function out =getlinksource(dire)
         if ispc
             cmd=['powershell -Command "(Get-Item ' dire ').Target'];
             [~,src]=system(cmd);
@@ -636,7 +638,7 @@ methods(Static,Access=private)
         elseif Px.islinux
             str=['readlink -f ' dire];
         end
-        [bS,out]=system(str);
+        [bS,out]=unix(str);
         out=out(1:end-1);
         if bS==1
             out=nan;
@@ -655,11 +657,12 @@ methods(Static,Access=private)
             %end
             %cmd=['runas /user:administrator "mklink ' origin ' ' destination '"'];
             cmd=['mklink /d ' destination ' ' origin];
+            [bSuccess]=system(cmd);
         else
             cmd=['ln -s ' origin ' ' destination];
+            [bSuccess]=unix(cmd);
         end
 
-        [bSuccess]=system(cmd);
     end
 
     function out = regExp(cell,exp,bIgnoreCase)
@@ -680,7 +683,11 @@ methods(Static,Access=private)
         end
     end
     function hn = get_hostname()
-        [~,hn]=system('hostname');
+        if ispc
+            [~,hn]=system('hostname');
+        else
+            [~,hn]=unix('hostname');
+        end
         hn=strrep(hn,newline,'');
     end
     function out = islinux()
@@ -691,24 +698,24 @@ methods(Static,Access=private)
             out=0;
         end
     end
-    function []=fix_link(dire,gdSrc,bTest)
+    function []=fix_link(dire,gdSrc,bTest,home)
         if ~exist('bTest','var') || isempty(bTest)
             bTest=0;
         end
-        gdSrc=Px.rephome(gdSrc);
+        gdSrc=strrep(gdSrc,'~',home);
 
         islink=Px.issymboliclink(dire);
         if islink==0
             error([ 'Unexpected non-symbolic link at ' dire ]);
         end
 
-        src=Px.linksource(dire);
+        src=Px.getlinksource(dire);
         if isnan(src)
             error('Something went wrong');
         end
 
         if ~ispc
-            gdSrc=Px.linksource(gdSrc);
+            gdSrc=Px.getlinksource(gdSrc);
         end
         if ~bTest && ~strcmp(gdSrc,src)
             warning(['Fixing bad symlink ' src ' to ' gdSrc]);
@@ -795,13 +802,12 @@ methods(Static)
         end
     end
 
-    function oldPath=addToPath(rootFolder)
-    % ADD DIRECTORIES AND SUBDIRECTORIES TO PATH CLEANLY
-        allFolders = genpath(rootFolder);
-        %allFolders
+    function oldPath=add_path(pathlist,defpath)
+        dirs=[defpath pathsep Px.gen_path(pathlist)];
+
         try
-            cleanFolders = Px.cleanPath(allFolders);
-            oldPath = addpath(cleanFolders, '-end');
+            %oldPath = addpath(dirs, '-end');
+            oldPath = matlabpath(dirs);
         catch
             warning('Problem adding path. Likley a borken sym link.');
         end
@@ -850,6 +856,110 @@ methods(Static)
             Px('_0_');
         else
             Px(1);
+        end
+   end
+    function p = gen_path(d)
+        % String Adoption
+        if nargin > 0
+            d = convertStringsToChars(d);
+        end
+
+        if nargin==0,
+            p = Px.gen_path(fullfile(matlabroot,'toolbox'));
+        if length(p) > 1, p(end) = []; end % Remove trailing pathsep
+            return
+        end
+
+        % initialise variables
+        classsep = '@';  % qualifier for overloaded class directories
+        packagesep = '+';  % qualifier for overloaded package directories
+        p = '';           % path to be returned
+
+        % Generate path based on given root directory
+        if iscell(d)
+            f=cellfun(@dir,d,'UniformOutput',false);
+            files=vertcat(f{:});
+            p=[p strjoin(d,pathsep) pathsep];
+            bCell=1;
+        else
+            files = dir(d); % XXX BOTTLENECK
+            p = [p d pathsep];
+            bCell=0;
+        end
+        if isempty(files)
+            return
+        end
+
+        % Add d to the path even if it is empty.
+
+        % set logical vector for subdirectory entries in d
+        isdir = logical(cat(1,files.isdir));
+        %
+        % Recursively descend through directories which are neither
+        % private nor "class" directories.
+        %
+        dirs = files(isdir); % select only directory entries from the current listing
+        dirs=dirs(3:end);
+
+        if ~bCell
+            for i=1:length(dirs)
+                dirname = dirs(i).name;
+                if ~strncmp( dirname,classsep,1) && ~strncmp( dirname,packagesep,1) && ~strcmp( dirname,'private') && isempty(regexp(dirname,'^(_Ar|_old|.svn|.git|.hg)'))
+                    p = [p Px.gen_path([d filesep dirname])]; % recursive calling of this function.
+                end
+            end
+        else
+            lastdire='';
+            for i=1:length(dirs)
+                dirname = dirs(i).name;
+                dire    = dirs(i).folder;
+                if ~strcmp(dire,lastdire)
+                    bAdd=~strcmp( dirname,'.') && ~strcmp( dirname,'..') && ~strncmp( dirname,classsep,1) && ~strncmp( dirname,packagesep,1) && ~strcmp( dirname,'private') && isempty(regexp(dirname,'^(_Ar|_old|.svn|.git|.hg)'));
+                end
+                if bAdd
+                    for j = 1:length(d)
+                        p = [p Px.gen_path([ dire filesep dirname]) ]; % recursive calling of this function
+                    end
+                end
+                lastdire=dirname;
+            end
+        end
+    end
+    function p=get_default_path()
+
+        if strncmp(computer,'PC',2)
+            RESTOREDEFAULTPATH_perlPath = [matlabroot '\sys\perl\win32\bin\perl.exe'];
+            RESTOREDEFAULTPATH_perlPathExists = exist(RESTOREDEFAULTPATH_perlPath,'file')==2;
+        else
+            [RESTOREDEFAULTPATH_status, RESTOREDEFAULTPATH_perlPath] = matlab.system.internal.executeCommand('which perl');
+            RESTOREDEFAULTPATH_perlPathExists = RESTOREDEFAULTPATH_status==0;
+            RESTOREDEFAULTPATH_perlPath = (regexprep(RESTOREDEFAULTPATH_perlPath,{'^\s*','\s*$'},'')); % deblank lead and trail
+        end
+
+        % If Perl exists, execute "getphlpaths.pl"
+        if RESTOREDEFAULTPATH_perlPathExists
+            RESTOREDEFAULTPATH_cmdString = sprintf('"%s" "%s" "%s"', ...
+                RESTOREDEFAULTPATH_perlPath, which('getphlpaths.pl'), matlabroot);
+            [RESTOREDEFAULTPATH_perlStat, RESTOREDEFAULTPATH_result] = matlab.system.internal.executeCommand(RESTOREDEFAULTPATH_cmdString);
+        else
+            error(message('MATLAB:restoredefaultpath:PerlNotFound'));
+        end
+
+        % Check for errors in shell command
+        if (RESTOREDEFAULTPATH_perlStat ~= 0)
+            error(message('MATLAB:restoredefaultpath:PerlError',RESTOREDEFAULTPATH_result,RESTOREDEFAULTPATH_cmdString));
+        end
+
+        % Check that we aren't about to set the MATLAB path to an empty string
+        if isempty(RESTOREDEFAULTPATH_result)
+            error(message('MATLAB:restoredefaultpath:EmptyPath'))
+        end
+
+        % Set the path, adding userpath if possible
+        if exist( 'userpath.m', 'file' ) == 2
+            p=[userpath ';' RESTOREDEFAULTPATH_result];
+        else
+            p=RESTOREDEFAULTPATH_result;
         end
     end
 
