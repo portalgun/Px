@@ -1,38 +1,37 @@
-- recursive dependencies
-- get home directory in windows
-- setup
-    bHistory
-    create config
-    install in startup file
-    uninstall from startup file
+- rm px and number command from history  
+  (rm history)
 
 - default root should be ../
-- i option (???) - ignore toolbox
-- libraries directory l:
-- make stable m files read only
-- do gtags within workspaces
+- get home directory in windows
+  
+- recursive dependencies
+
+- make lib files read only
 - link toolboxes if marked as such in config
 - +modules?
-
+*  setup
+git
+create config
+install in startup file
+uninstall from startup file
+compile mex
+* C code
+readlink
+ln
+* Dep handler
+- indep px dep handler
+  for people who don't want to use px, but want to use packages
+** px setup script
+download px from github packages
+** px packaging
+create setup script, which specifies which px packaged version
 * GIT
-- checkout hash
-- get current hash
-- add git tag/branch option
-
-[prjtype]:[directory]:[hash/tag]:[url]
-  prjtype - 1 letter code
-directory - starts with . or /
-url       - has periods not at start
-if directory empty
-    checkout
-    put it into lib
-if hash/tag empty
-    assume master
-          put into config
 
 
-get rid of stable directories, just name them differently
-    prj__hash
+
+dire stable -> lib
+* Gtags
+- do gtags within workspaces
 * History  NOTES
 %com.mathworks.mlservices.MLCommandHistoryServices.getAllHistory
 %com.mathworks.mlservices.MLCommandHistoryServices.getSessionHistory
@@ -70,5 +69,3 @@ com.mathworks.mlservices.MLCommandHistoryServices.add('px')
 ?repeat
 ?error
 ?batch
-
-

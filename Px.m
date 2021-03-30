@@ -1,9 +1,10 @@
 classdef Px < handle
-% dos/unix        40%  36      getlinksource(19) LN(4)
-% history_fun    .48%  3
+% genpath         50%     dir
+% unix            29%     getlinksource(19) LN(4)
 properties
     root
     %root='~/Code/mat/'
+    libDir
     rootWrkDir
     rootSWrkDir
     rootPrjDir
@@ -50,7 +51,6 @@ methods
             obj.bEcho=bEcho;
         end
 
-
         obj.hostname=Px.get_hostname();
         obj.home=Px.gethome();
         obj.get_self_path();
@@ -96,7 +96,9 @@ methods
 
         %GETTOOLBOXES
         obj.tlbxs=Px.getProjects(obj.rootTlbxDir,1);
-        obj.tlbxs(ismember(obj.tlbxs,obj.Options.rm))=[];
+        if ~isempty([obj.Options.rm])
+            obj.tlbxs(ismember(obj.tlbxs,obj.Options.rm))=[];
+        end
         obj.tlbxs(ismember(obj.tlbxs,obj.prj))=[];
 
         %ADD TOOLBOXES IF NOT ADDED ALREADY, UNLESS EXCLUDED
@@ -268,6 +270,9 @@ methods
         if isempty(obj.rootHookDir)
             obj.rootHookDir='localHooks';
         end
+        if isempty(obj.libDir)
+            obj.libDir='lib';
+        end
 
         prps={ ...
              ,'rootWrkDir' ...
@@ -276,6 +281,7 @@ methods
              ,'rootStbDir' ...
              ,'rootTlbxDir' ...
              ,'rootHookDir' ...
+             ,'libDir' ...
         };
         for i = 1:length(prps)
             obj.(prps{i})=Px.filesepc(obj.(prps{i}));
@@ -408,9 +414,9 @@ methods
 
             %EVAL AS FUNCTION OR SCRIPT
             if isfunc
-                out=eval([prj ';']);
+                out=eval([obj.prj ';']);
             else
-                eval([prj ';']);
+                eval([obj.prj ';']);
             end
 
             cd(old);
@@ -467,6 +473,8 @@ methods
         obj.Options.prj='';
         obj.Options.add=cell(0,1);
         obj.Options.rm=cell(0,1);
+        obj.Options.site=cell(0,1);
+        obj.Options.version=cell(0,1);
 
         bStart=bPrjConfig; % Indicates valid header has been identified
         if bPrjConfig
@@ -503,13 +511,16 @@ methods
             end
             bStart=1;
             [code,dire,host,version]=Px.strip_fun(tline,Px.sep,obj.PRJS,obj.sprjs); % a = s,d,e
-            [dest,rdest]=Px.sort_fun(code,dire,host,version,obj.rootPrjDir,obj.rootStbDir,obj.hostname);
+            [dest,rdest,site]=Px.sort_fun(code,dire,host,version,obj.rootPrjDir,obj.rootStbDir,obj.libDir,obj.hostname);
             if isempty(dest)
                 return
             end
             if isempty(obj.prj) || (strcmp(obj.prj,dire(1:end-1)) && ((obj.stableflag==1 && code=='s') || ((obj.stableflag==0 && code=='d'))))
                 obj.Options(end+1).prj=dest;
                 obj.Options(end).add{1,1}=dest;
+                obj.Options(end).rm{1,1}=dest;
+                obj.Options(end).version{1,1}=dest;
+                obj.Options(end).site{1,1}=dest;
             else
                 bStart=0;
             end
@@ -517,12 +528,15 @@ methods
         end
         function obj=get_body(obj,tline)
             [code,dire,host,version]=Px.strip_fun(tline,Px.sep,obj.PRJS,obj.sprjs);
-            [dest,rdest]=Px.sort_fun(code,dire,host,version,obj.rootPrjDir,obj.rootStbDir,obj.hostname);
-            if ~isempty(dest)
-                obj.Options(end).add{end+1,1}=dest;
-            elseif ~isempty(rdest)
-                obj.Options(end).rm{end+1,1}=dest;
-            end
+            [dest,rdest,site]=Px.sort_fun(code,dire,host,version,obj.rootPrjDir,obj.rootStbDir,obj.libDir,obj.hostname);
+            obj.Options(end+1).add=dest;
+            obj.Options(end).rm=rdest;
+            obj.Options(end).version=version;
+            obj.Options(end).site=site;
+            %obj.Options(end).add{end+1,1}=dest;
+            %obj.Options(end).rm{end+1,1}=rdest;
+            %obj.Options(end).version{end+1,1}=version;
+            %obj.Options(end).site{end+1,1}=site;
         end
     end
     function obj=make_wrk_dir(obj)
@@ -536,8 +550,22 @@ methods
         end
     end
     function obj=parse_prj_options(obj)
+        obj.clone_to_lib();
         obj.rm_removed_symlinks();
         obj.populate_wrk_dir();
+    end
+    function obj=clone_to_lib(obj);
+        for i = 2:length(obj.Options)
+            O=obj.Options(i);
+            if isempty(O.site)
+                return
+            end
+            Px.git_clone(O.site,O.add);
+            if ~isempty(O.version)
+                Px.git_checkout(O.add,O.version);
+            end
+
+        end
     end
     function obj=rm_removed_symlinks(obj)
         if isempty(obj.Options)
@@ -566,14 +594,23 @@ methods
     function obj=populate_wrk_dir(obj);
         %Make sure that projects in each exist, then symlink
         for i=1:length(obj.Options)
-            O=obj.Options(i);
-            m=O.prj; %main project directory
-            if ~exist(m,'dir')
+            O=[obj.Options(i)];
+            if ~isempty(O.prj)
+                m=O.prj; %main project directory
+            elseif isempty(O.prj) && ~isempty(O.add)
+                m=O.add; %main project directory
+            elseif isempty(O.prj) && isempty(O.add)
+                continue
+            elseif ~exist(m,'dir')
                 disp(['Directory ' m ' does not exist']);
                 continue
             end
             for j = 1:length(O.add)
-                s=O.add{j}; %dependencies
+                if iscell(O.add)
+                    s=O.add{j}; %dependencies
+                else
+                    s=O.add;
+                end
                 if ~exist(s,'dir')
                     disp(['Directory ' s ' does not exist']);
                     continue
@@ -604,7 +641,7 @@ methods(Static,Access=private)
         end
     end
     function home=gethome()
-        if islinux()
+        if Px.islinux()
             [~,home]=unix('echo $HOME');
             home=strrep(home,newline,'');
         else
@@ -753,9 +790,10 @@ methods(Static,Access=private)
         end
     end
 
-    function [dest,rdest]=sort_fun(code,dire,host,version,rootPrjDir,rootStbDir,hostname)
+    function [dest,rdest,site]=sort_fun(code,dire,host,version,rootPrjDir,rootStbDir,libDir,hostname)
         dest=[];
         rdest=[];
+        site=[];
         if ~isempty(host) && ~strcmp(host,hostname)
             return
         end
@@ -769,8 +807,19 @@ methods(Static,Access=private)
                 dest=dire;
             case 'i'
                 rdest=dire;
+            case 'l'
+                site=dire;
+                dire=Px.get_version_dire_name(version,dire);
+                dest=[libDir dire];
+            otherwise
+                error(['Invalid label ' code ]);
         end
-        est=Px.filesepc(dest);
+        if ~isempty(dest)
+            dest=Px.filesepc(dest);
+        end
+        if ~isempty(rdest)
+            rdest=Px.filesepc(rdest);
+        end
     end
     function lines=file2cell(fname)
         fid = fopen(fname);
@@ -952,7 +1001,7 @@ methods(Static)
 
         % Check that we aren't about to set the MATLAB path to an empty string
         if isempty(RESTOREDEFAULTPATH_result)
-            error(message('MATLAB:restoredefaultpath:EmptyPath'))
+            error(message('MATLAB:restoredefaultpath:EmptyPath'));
         end
 
         % Set the path, adding userpath if possible
@@ -960,6 +1009,126 @@ methods(Static)
             p=[userpath ';' RESTOREDEFAULTPATH_result];
         else
             p=RESTOREDEFAULTPATH_result;
+        end
+    end
+%% GIT
+    function version = parse_version(version)
+    end
+    function direName=get_version_dire_name(version,site)
+        %site__prj__versionORhash
+        site=regexprep(site,'https*://','');
+        site=regexprep(site,'\..*?/','/');
+        if endsWith(site,'/')
+            site=site(1:end-1);
+        end
+        direName=strrep(site,'/','__');
+        if ~isempty('version')
+            direName=[direName '@' version];
+        end
+    end
+    function status=git_checkout(dire,version)
+        %checkout -> into lib
+        %dire stable -> lib
+        oldDir=cd(dire);
+        if isunix
+            [~,msg]=unix(['git checkout ' version ' --quiet']);
+        else
+            [~,msg]=system(['git checkout ' version ' --quiet']);
+        end
+        cd(oldDir);
+    end
+    function status=git_clone(site,direName)
+        out=Px.git_local_state(direName);
+        if out==1
+            'out equals 1'
+            % TODO
+        elseif out==2
+            'out equals 2'
+            % TODO
+        elseif out==3
+            origin=Px.git_get_origin(direName);
+            if ~strcmp(origin,site)
+               % TODO
+               'origin does not match site'
+            end
+        end
+
+        if out==0 && isunix
+            [status,msg]=unix(['git clone -q ' site ' ' direName ]);
+        elseif out==0
+            [status,msg]=system(['git clone ' site ' ' direName ]);
+        end
+    end
+    function hash=git_hash(dire)
+        if exist('dire','var') && ~isempty(dire)
+            oldDir=cd(dire);
+            bRestore=1;
+        else
+            bRestore=0;
+        end
+        if isunix
+            [~,hash]=unix('git rev-parse HEAD');
+            hash=strsplit(hash,newline);
+            hash(cellfun(@isempty,hash))=[];
+            hash=branch{1};
+        else
+            [~,hash]=system('git rev-parse HEAD');
+        end
+        if bRestore
+            cd(oldDir);
+        end
+    end
+    function branc=git_get_branch(dire)
+        if exist('dire','var') && ~isempty(dire)
+            oldDir=cd(dire);
+            bRestore=1;
+        else
+            bRestore=0;
+        end
+        if isunix
+            [~,branch]=unix('git rev-parse --abbrev-ref HEAD');
+            branch=strsplit(branch,newline);
+            branch(cellfun(@isempty,branch))=[];
+            branch=branch{1};
+        else
+            [~,branch]=system('git rev-parse --abbrev-ref HEAD');
+        end
+        if bRestore
+            cd(oldDir);
+        end
+    end
+    function origin=git_get_origin(dire)
+        if exist('dire','var') && ~isempty(dire)
+            oldDir=cd(dire);
+            bRestore=1;
+        else
+            bRestore=0;
+        end
+        if isunix
+            [~,origin]=unix('git config --get remote.origin.url');
+            origin=strsplit(origin,newline);
+            origin(cellfun(@isempty,origin))=[];
+            origin=origin{1};
+        else
+            system('git config --get remote.origin.url');
+        end
+        if bRestore
+            cd(oldDir);
+        end
+    end
+    function [out]=git_local_state(direName)
+        % 0 dire doesn't exist
+        % 1 empty
+        % 2 not empty with files, no .git
+        % 3 has git
+        if ~exist(direName,'dir')
+            out=0;
+        elseif ~exist([direName '.git'],'dir') && length(dir(dirName)) == 2
+            out=1;
+        elseif ~exist([direName '.git'],'dir') && length(dir(dirName)) > 2
+            out=2;
+        else
+            out=3;
         end
     end
 
