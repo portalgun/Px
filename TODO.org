@@ -1,4 +1,68 @@
-- rm px and number command from history  
+upgrade
+    input strings into config
+submodules and dependencies
+
+
+setup
+    compiled code
+    compiled code dir
+genpath outside of matlab
+genpath 
+    only 2 times
+          don't follow symlinks
+          use find,rg, faster?
+           # rg --no-ignore --hidden --files -g "!{.fonts,.cache,.local,.julia/**,.java/**,matlab}"'
+           find -L . -type d -not -path '*/\.git*' -not -path '*/\.svn*' -not -path '*/\_old*/' 
+    bin -> like genconf
+        then no gen
+        but then new files don't get added automatically...
+        wrk - working directory
+rehash classes etc function
+base tools
+    px system tools
+    px matlab tools
+    px git tools
+    CfgRd
+    logging tools
+    DepTools
+
+check non-std dependencies
+"environmental variables"
+
+config file naming 
+    host.prj.lib.config
+log naming
+    host.prj.lib.subr.log
+
+
+optional dependencies section in config
+    prompt to download
+broken symlinks can act as non-existant files -> problem with history
+
+stable only in root config
+    dire stable -> lib
+ one-liner
+ no stable-projects directory
+ only workspace
+ everything into lib
+ symlinked to workspace
+
+(p) prj
+(s) src  <- tools
+(l) lib 
+(e) etc
+(t) tlb  
+(m) media <- default save directory
+(v) var <- logging
+    dat
+(?) tmp 
+
+
+   - imap
+   - dir
+
+   - config directory for projects
+   - rm px and number command from history  
   (rm history)
 
 - default root should be ../
@@ -7,14 +71,15 @@
 - recursive dependencies
 
 - make lib files read only
+  chmod -w
 - link toolboxes if marked as such in config
 - +modules?
-*  setup
-git
-create config
-install in startup file
-uninstall from startup file
-compile mex
+- do gtags within workspaces?
+* logging
+timestamps
+capturing output...
+    probably matlab bulitins
+run script from shell command
 * C code
 readlink
 ln
@@ -25,13 +90,10 @@ ln
 download px from github packages
 ** px packaging
 create setup script, which specifies which px packaged version
-* GIT
-
-
-
-dire stable -> lib
-* Gtags
-- do gtags within workspaces
+* media handler
+default save location
+* var handler
+crashdumps
 * History  NOTES
 %com.mathworks.mlservices.MLCommandHistoryServices.getAllHistory
 %com.mathworks.mlservices.MLCommandHistoryServices.getSessionHistory
@@ -69,3 +131,4 @@ com.mathworks.mlservices.MLCommandHistoryServices.add('px')
 ?repeat
 ?error
 ?batch
+

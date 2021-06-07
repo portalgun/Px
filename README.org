@@ -13,11 +13,11 @@
     Manages your Matlab project paths and dependencies with ease.
 
  example calls:
-           px %(then return a number corresponding to a project)
+           px          % for prompt 
 
-           px(prjName) % to swith to project
+           px(prjName) % to swith to project without prompt
 
-           pxr % to reload current project 
+           pxr         % to reload current project 
 
  SETUP INSTRUCTIONS:
     1. PLACE BELOW IN YOUR STARTUP FILE
@@ -36,13 +36,18 @@
     localHooks/           Any matlab function in this directory with the same name as a project will run after Px finishes loading that project
 
 Features: 
-    Host specific configuration
+    Hostname specific configuration
     Project specific configuration
-    Hooks
+    Project Hooks
     By-project matlab history management
+    Git integration
+    Emacs projectile support
+    GTAGS suport
+    Unix-like directory structure
 
 Features to come:
-    Git integration
     More minimal setup
 
 #+END_SRC
+https://www.mathworks.com/matlabcentral/answers/11200-linux-matlab-is-it-possible-to-determine-whether-a-directory-is-a-link
+
