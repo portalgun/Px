@@ -13,15 +13,18 @@ properties
     rootSWrkDir
     rootPrjDir
     rootStbDir
-    rootTlbxDir
+    rootSbinDir
     rootHookDir
+    rootCompiledDir
+    configDir
+    curPrjLoc
 
     ignoreDirs={'AR','_AR','_old','.git'}
 
     prjs
     sprjs
     prj
-    tlbxs
+    sbins
 
     Options  % 1 - paths
     rootconfig
@@ -60,17 +63,11 @@ methods
             obj.bEcho=bEcho;
         end
 
-        obj.hostname=Px.get_hostname();
-        obj.home=Px.gethome();
-        obj.get_self_path();
-        obj.rootconfig=[obj.selfPath '.config'];
-        if ~exist(obj.rootconfig,'file')
-            obj.setup();
-        end
+        obj.init();
 
-        obj.get_root_configs();
-        obj.get_dirs();
-        if exist('prj','var') && ~isempty(prj) && (isnumeric(prj) || strcmp(prj,'_0_'))
+        if exist('prj','var') && ~isempty(prj) && ischar(prj) && strcmp(prj,'_INIT_ONLY_')
+            return
+        elseif exist('prj','var') && ~isempty(prj) && (isnumeric(prj) || strcmp(prj,'_0_'))
             prj=Px.get_current();
         end
 
@@ -103,18 +100,21 @@ methods
         obj.make_wrk_dir();
         obj.parse_prj_options();
 
-        %GETTOOLBOXES
-        obj.tlbxs=Px.getProjects(obj.rootTlbxDir,1);
+        %GETSBIN
+        obj.sbins=Px.getProjects(obj.rootSbinDir,1);
         if ~isempty([obj.Options.rm])
-            obj.tlbxs(ismember(obj.tlbxs,obj.Options.rm))=[];
+            obj.sbins(ismember(obj.sbins,obj.Options.rm))=[];
         end
-        obj.tlbxs(ismember(obj.tlbxs,obj.prj))=[];
+        obj.sbins(ismember(obj.sbins,obj.prj))=[];
 
-        %ADD TOOLBOXES IF NOT ADDED ALREADY, UNLESS EXCLUDED
-
+        %ADD SBIN IF NOT ADDED ALREADY, UNLESS EXCLUDED
         defpath=Px.get_default_path();
-        t=strcat(obj.rootTlbxDir,obj.tlbxs);
-        pathlist=transpose({obj.selfPath obj.prjWDir t{:}});
+        t=strcat(obj.rootSbinDir,obj.sbins);
+        if ~isempty(obj.selfCompiledDir)
+            pathlist=transpose({obj.seflCompiledDir obj.selfPath obj.prjWDir t{:}});
+        else
+            pathlist=transpose({obj.selfPath obj.prjWDir t{:}});
+        end
 
         obj.add_path(pathlist,defpath);
 
@@ -205,14 +205,14 @@ methods
 
             if length(spl) == 1
                 continue
-            elseif length(spl) == 2 && exist(spl{2},'dir')
+            elseif length(spl) == 2 
                 obj.(c)=spl{2};
             elseif length(spl) == 3 && strcmp(spl{2},obj.hostname)
                 obj.(c)=spl{3};
             else
                 continue
             end
-            if Px.regExp(obj.(c),'[0-9]+');
+            if Px.regExp(obj.(c),'^[0-9]+$');
                 obj.(c)=str2double(obj.(c));
             end
         end
@@ -232,39 +232,51 @@ methods
         dir=[obj.rootStbDir obj.prj];
         obj.selfPath=strrep(fdir,fname,'');
     end
-    function obj=add_self_path(obj)
-    end
     function obj=get_dirs(obj)
         if isempty(obj.rootWrkDir)
-            obj.rootWrkDir ='workspaces';
+            obj.rootWrkDir ='bin';
+        end
+        if isempty(obj.rootCompiledDir)
+            obj.rootCompiledDir ='cbin';
         end
         if isempty(obj.rootSWrkDir)
             obj.rootSWrkDir='stableWorkspaces';
         end
         if isempty(obj.rootPrjDir)
-            obj.rootPrjDir ='projects';
+            obj.rootPrjDir ='prj';
         end
         if isempty(obj.rootStbDir)
             obj.rootStbDir ='stableProjects';
         end
-        if isempty(obj.rootTlbxDir)
-            obj.rootTlbxDir='toolboxes';
+        if isempty(obj.rootSbinDir)
+            obj.rootSbinDir='sbin';
         end
         if isempty(obj.rootHookDir)
-            obj.rootHookDir='localHooks';
+            obj.rootHookDir='hooks';
         end
         if isempty(obj.libDir)
             obj.libDir='lib';
         end
+        if isempty(obj.libDir)
+            obj.libDir='lib';
+        end
+        if isempty(obj.curPrjLoc)
+            obj.curPrjLoc=obj.selfPath;
+        end
+        if isempty(obj.configDir)
+            obj.configDir='etc';
+        end
 
         prps={ ...
+             ,'rootCompiledDir' ...
              ,'rootWrkDir' ...
              ,'rootSWrkDir' ...
              ,'rootPrjDir' ...
              ,'rootStbDir' ...
-             ,'rootTlbxDir' ...
+             ,'rootSbinDir' ...
              ,'rootHookDir' ...
              ,'libDir' ...
+             ,'curPrjLoc' ...
         };
         for i = 1:length(prps)
             obj.(prps{i})=Px.filesepc(obj.(prps{i}));
@@ -287,8 +299,8 @@ methods
         obj.sprjs(ismember(obj.sprjs,obj.ignoreDirs))=[];
     end
     function obj=disp_prjs(obj)
-        disp([newline '  r last open project']);
-        fprintf(['%3.0f Toolboxes Only' newline newline],0);
+        disp([newline '  r last open poject']);
+        fprintf(['%3.0f Sbin Only' newline newline],0);
         fprintf(['%-31s %-25s' newline],'DEVELOPMENT','STABLE');
         for i = 1:length(obj.prjs)
             if i > length(obj.sprjs)
@@ -429,7 +441,7 @@ methods
             config=obj.rootconfig;
         end
 
-        %function []=pxs(rootPrjDir,rootStbDir,rootTlbxDir)
+        %function []=pxs(rootPrjDir,rootStbDir,rootSbinDir)
         %px symbolic links - handle dependencies
         % TODO
         % check for recursion
@@ -457,7 +469,7 @@ methods
             obj.Options(1).prj=obj.prjDir;
             obj.Options(1).add{1,1}=obj.prjDir;
         end
-        configs={'root','history'};
+        configs={'root','history','projectile'};
         while true
             tline=fgetl(fid);
 
@@ -481,7 +493,7 @@ methods
         fclose(fid);
 
         function [obj,bStart]=get_header(obj,tline)
-            if Px.regExp(tline,'^[rR]oot:')
+            if Px.regExp(tline,'^[rR]oot:')  || Px.regExp(tline,'^curPrjLoc')
                 bStart=0;
                 return
             end
@@ -560,28 +572,40 @@ methods
         if isempty(obj.Options)
             return
         end
-        deps=obj.Options(1).add;
+        deps=transpose([obj.Options.add]);
         deps=cellfun(@get_name_fun,deps,'UniformOutput',false);
 
         dirs=dir(obj.curWrk);
+        dirs=dirs(3:end);
         name=transpose({dirs.name});
         full=join([transpose({dirs.folder}) name],filesep);
-        ind=vertcat(dirs.isdir) & ~ismember(name,[{'.'; '..'}; deps]);
+        bDir=vertcat(dirs.isdir);
+        %bDir=bDir(3:end);
+        %full=full(3:end);
+        %name=name(3:end);
+        ind=bDir & ~ismember(name,deps);
         rmdirs=full(ind);
         for i = 1:length(rmdirs)
             delete(rmdirs{i}); % works with symlinks
         end
 
         function out=get_name_fun(file)
-            if endsWith(file,'/')
+            if endsWith(file,filesep)
                 file=file(1:end-1);
             end
+            if endsWith(file,'.m')
+                ext='.m';
+            else
+                ext='';
+            end
             [~,out]=fileparts(file);
+            out=[out ext];
 
         end
     end
     function obj=populate_wrk_dir(obj);
         %Make sure that projects in each exist, then symlink
+        obj.wrkDirs={};
         for i=1:length(obj.Options)
             O=[obj.Options(i)];
             if ~isempty(O.prj)
@@ -673,10 +697,12 @@ methods(Static, Access=private)
                 rdest=dire;
             case 'l'
                 site=dire;
-                dire=Px.get_version_dire_name(version,dire);
+                if ~isempty(version)
+                    dire=Px.get_version_dire_name(version,dire);
+                end
                 dest=[libDir dire];
             otherwise
-                error(['Invalid label ' code ]);
+                error(['Invalid label ' code ' for ' dire]);
         end
         if ~isempty(dest)
             dest=Px.filesepc(dest);
