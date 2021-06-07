@@ -1,5 +1,13 @@
+#if defined(__WIN64__)
 #include "mex.h"
 #include <sys/stat.h>
+#elif defined(__APPLE__)
+#include "mex.h"
+#include <sys/stat.h>
+#elif defined(__linux__)
+#include "mex.h"
+#include <sys/stat.h>
+#endif
 void mexFunction(int nlhs, mxArray *plhs[], 
                  int nrhs, const mxArray *prhs[])
 
