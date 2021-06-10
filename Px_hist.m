@@ -19,7 +19,6 @@ methods
         function history_fun(name,prjdir,mdir,home)
             pHist=[prjdir '.' name];
             mHist=[mdir name];
-            prjdir
             if ~exist(mHist,'file') && ~exist(pHist,'file') % XXX SLOW 1
                 error(['History file ' name ' does not exist']);
             end

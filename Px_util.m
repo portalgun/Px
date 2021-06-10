@@ -51,7 +51,9 @@ methods(Static)
 end
 methods(Static, Hidden)
     function test_install()
-        Px.installPx([userpath filesep], [userpath filesep 'myProjects']);
+        prj='~/Cloud/Code/mat/prj/';
+        %prj=[userpath filesep 'myProjects'];;
+        Px.installPx([userpath filesep],prj);
     end
 end
 methods(Static, Access={?Px,?Px_hist})

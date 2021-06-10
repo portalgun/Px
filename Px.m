@@ -57,7 +57,7 @@ methods
         bInstalled=obj.get_install_status();
 
         if length(varargin) > 0
-            obj.mode=varargin(1);
+            obj.mode=varargin{1};
         else
             obj.mode='prompt';
         end
@@ -167,9 +167,17 @@ methods
         obj.root=obj.parent(obj.selfPath);
     end
     function prj=get_current_prj(obj)
-        fid=fopen([obj.curPrjLoc '.current_project']);
+        fname=[obj.curPrjLoc '.current_project'];
+        if ~exist(fname,'file');
+            Fil.touch(fname);
+        end
+        fid=fopen(fname);
         tline=fgets(fid);
         fclose(fid);
+        if isempty(tline)
+            prj=[];
+            return
+        end
         prj=strtrim(strrep(tline,char(10),''));
     end
     function obj=find_root_config(obj);
@@ -752,6 +760,7 @@ methods
         end
     end
     function obj=echo(obj)
+        obj.mode
         switch obj.mode
         case {'prompt','startup'}
             display('Done.')

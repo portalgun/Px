@@ -9,9 +9,7 @@ methods
         bComplete=false;
         cl=onCleanup(@() Px_install.restore_path(bComplete,old));
 
-
         % XXX TODO SAVE OLDPATH
-
         restoredefaultpath;
         if length(varargin) == 0
             error('Px Install: directory required for first parameter');
