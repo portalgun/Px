@@ -792,7 +792,6 @@ methods(Static, Access=?Px_install)
             return
         end
 
-        code
         switch code
             case 'd'
                 dest=[rootPrjDir dire];

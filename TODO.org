@@ -1,14 +1,9 @@
-split out git into own thing? -> matGit
-session management
-get matlab install directory
-get startup file
-insert in startup file
-
-submodules and dependencies
+submodules and dependencies?
 
 base tools
     CfgRd
     RW
+split out git into own thing? -> matGit
 
 "environmental variables" -> px config file
 
@@ -31,39 +26,6 @@ more options
       bMedia
       bData
 
-Px.addDep
-Px.rmDep
-Px.new
-Px.rm
-Px.install
-Px.uninstall
-Px.edit
-      open .px file
-Px.check 
-Px.test
-Px.publish 
-      check no 'd' in config
-      check dependencies match upstream
-      check dep branches are up to date
-      check no missng dependencies on function level
-      run tests
-      if master/main
-            check tagged
-Px.help
-      Px.help.all
-      Px.help.config
-      Px.help.config_root
-      Px.help.config_project
-      Px.help.commands
-      Px.help.version
-      Px.help.install
-      Px.help.uninstall
-      Px.help.optimize
-      Px.help.directories
-Px.upgrade
-% HIDDEN
-Px.installPX
-Px.uninstallPx
 
 if updating removing, make sure that dependencies are removed too
 
