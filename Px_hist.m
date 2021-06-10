@@ -5,7 +5,7 @@ methods
         %/home/dambam/.matlab/java/jar/mlservices.jar
         %% MAKE history files
         prjdir=obj.prjDir;
-        mdir=Px.filesepc(prefdir);
+        mdir=Dir.parse(prefdir);
 
         names={'history.m','History.xml','History.bak'};
         % History.xml = desktop command history
@@ -19,15 +19,16 @@ methods
         function history_fun(name,prjdir,mdir,home)
             pHist=[prjdir '.' name];
             mHist=[mdir name];
+            prjdir
             if ~exist(mHist,'file') && ~exist(pHist,'file') % XXX SLOW 1
                 error(['History file ' name ' does not exist']);
             end
             if ~exist(pHist,'file') % XXX SLOW 5
-                Px.touch(pHist);
+                Fil.touch(pHist);
             end
             if exist(mHist,'file')
-                bSym=Px.issymboliclink(mHist); % XXX SLOW 3
-                if bSym && strcmp(Px.getlinksource(mHist),pHist); % XXX SLOW 2
+                bSym=FilDir.isLink(mHist); % XXX SLOW 3
+                if bSym && strcmp(FilDir.readLink(mHist),pHist); % XXX SLOW 2
                     return
                 elseif bSym
                     delete(mHist);
@@ -37,7 +38,6 @@ methods
             end
 
             Px.LN_fun(pHist,mHist,0,home); % XXX SLOW 4
-
 
         end
     end
@@ -55,7 +55,7 @@ methods
         com.mathworks.mde.cmdhist.AltHistory.load(file,false);
     end
     function obj=load_history_from_file(obj)
-        mdir=Px.filesepc(prefdir);
+        mdir=Dir.parse(prefdir);
         mHist=[mdir 'history.m'];
     end
     function obj=restore_original_history(obj)

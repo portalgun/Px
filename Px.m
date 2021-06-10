@@ -1,28 +1,24 @@
-classdef Px < handle & Px_util & Px_git & Px_hist
-% unix            29%     getlinksource(19) LN(4)
-% ln
-% issymbolic link
-% hostname
-% isunix
-% islinux
+classdef Px < handle & Px_util & Px_git & Px_hist & Px_install
+% PERFORMANCE
+% combine fd commands
+%
+% base toools downlaod and compile directory
 properties
     root
     %root='~/Code/mat/'
     libDir
+    rootWriteDir
     rootWrkDir
-    rootSWrkDir
     rootPrjDir
-    rootStbDir
     rootSbinDir
     rootHookDir
     rootCompiledDir
     configDir
     curPrjLoc
 
-    ignoreDirs={'AR','_AR','_old','.git'}
+    ignoreDirs={'AR','_AR','_old','.git','.px','.svn'}
 
     prjs
-    sprjs
     prj
     sbins
 
@@ -31,62 +27,79 @@ properties
     prjconfig
     prjDir
     prjWDir
-    bHistory=1
-    bProjectile=0
-    bGtags=0
+    prjCompiledDir
+    bHistory=true
+    bProjectile=false
+    bGtags=false
 end
 properties(Hidden)
-    bEcho
+    mode
     selfPath
-    selfCompiledDir
-    stableflag
     hostname
     curWrk
     curCmp
     wrkDirs
     matroot
     PRJS
-    SPRJS
     home
+    installDir
+    bases
+    linkPrj
 end
 properties(Constant)
     sep=char(59)
+    baseUrl='https://github.com/portalgun/MatBaseTools'
+    baseV='master'
 end
 methods
-    function obj=Px(prj,bStable,bEcho)
-        if ~exist('bStable','var') || isempty(bStable)
-            bStable=0;
-        end
-        if ~exist('bEcho') || isempty(bEcho)
-            obj.bEcho=1;
+    function obj=Px(varargin)
+        obj.get_self_path();
+        bInstalled=obj.get_install_status();
+
+        if length(varargin) > 0
+            obj.mode=varargin(1);
         else
-            obj.bEcho=bEcho;
+            obj.mode='prompt';
         end
-
-        obj.init();
-
-        if exist('prj','var') && ~isempty(prj) && ischar(prj) && strcmp(prj,'_INIT_ONLY_')
+        if strcmp(obj.mode,'installPx') && bInstalled
+            error('Px already installed');
+        elseif strcmp(obj.mode,'installPx')
+            obj.install_px(varargin{2:end});
             return
-        elseif exist('prj','var') && ~isempty(prj) && (isnumeric(prj) || strcmp(prj,'_0_'))
-            prj=Px.get_current();
+        elseif strcmp(obj.mode,'install2')
+            obj.selfPath=varargin{2};
+            obj.root=varargin{3};
+            obj.rootconfig=varargin{4};
+            obj.linkPrj=varargin{5};
+
+            obj.setup_base_tools();
+            obj.config_root();
+            return
+        elseif ~bInstalled
+            error('Not installed');
+        elseif length(varargin) > 1
+            opts=struct(varargin{2:end});
         end
 
-        obj.sprjs=Px.getProjects(obj.rootStbDir);
+        obj.setup_base_tools();
+        obj.config_root();
+        % during installPx
+
+        if  ismember(obj.mode,{'install2','reset','startup','get_current'})
+            prj=obj.get_current_prj();
+        end
+        if strcmp(obj.mode,'get_current')
+            return
+        end
+
         obj.PRJS =Px.getProjects(obj.rootPrjDir);
 
         if ~exist('prj','var') || isempty(prj)
-            obj.get_prjs(bStable);
+            obj.get_prjs();
             obj.disp_prjs();
             obj.prompt_prj();
-        elseif  startsWith(prj,'s:')
-            obj.prj=strrep(prj,'s:','');
-            obj.stableflag=1;
         else
             obj.prj=prj;
-            obj.stableflag=0;
-        end
-        if bStable
-            obj.stableflag=1;
         end
         obj.get_prj_dir();
         obj.prjconfig=[obj.prjDir '.px'];
@@ -107,101 +120,216 @@ methods
         end
         obj.sbins(ismember(obj.sbins,obj.prj))=[];
 
-        %ADD SBIN IF NOT ADDED ALREADY, UNLESS EXCLUDED
-        defpath=Px.get_default_path();
-        t=strcat(obj.rootSbinDir,obj.sbins);
-        if ~isempty(obj.selfCompiledDir)
-            pathlist=transpose({obj.seflCompiledDir obj.selfPath obj.prjWDir t{:}});
-        else
-            pathlist=transpose({obj.selfPath obj.prjWDir t{:}});
-        end
-
-        obj.add_path(pathlist,defpath);
-
-        obj.cd_prj();
-
         if obj.bHistory
             obj.make_history();
         end
         if obj.bGtags
             obj.gen_gtags();
         end
+        obj.compile_prj_files();
+
+        % NEEDS TO BE DONE LAST TO NOT DISRUPT BASE TOOLS
+        pathlist=obj.get_paths();
+        Path.add(pathlist,Path.default());
 
         obj.run_hooks();
-        if obj.bEcho
-            display('Done.')
-        end
-    end
-    function obj=init(obj);
-        obj.hostname=Px.get_hostname();
-        obj.home=Px.gethome();
-        obj.get_self_path();
-        obj.rootconfig=[obj.selfPath 'Px.config'];
-        if ~exist(obj.rootconfig,'file')
-            obj.setup();
-        end
 
+        obj.cd_prj();
+        obj.echo();
+    end
+    function obj=setup_base_tools(obj)
+        % BASE TOOLS
+        %dire=[obj.parent(obj.self_path) 'cbin' etc;
+
+        obj.bases={obj.selfPath, [userpath filesep '.px' filesep]};
+        out=obj.is_base_installed();
+        if ~out
+            out=obj.find_base_install_dir();
+            if ~out
+                error('No valid install directory')
+            end
+            obj.download_base_tools();
+        end
+        obj.compile_base_tools();
+        obj.add_base_tools();
+    end
+    function obj=config_root(obj);
+        obj.hostname=Sys.hostname();
+        obj.home=Dir.home();
+        obj.get_root();
+
+        obj.find_root_config();
         obj.get_root_configs();
         obj.get_dirs();
-
-        % XXX
-        %obj.make_root_compiled_dir();
-        %obj.compile_root_mex();
+        obj.save_settings();
     end
-    function obj=setup(obj)
+    function get_root(obj,opts)
+        obj.root=obj.parent(obj.selfPath);
     end
-    function obj=compile_root_mex(obj)
-        srcs={'issymlink','readlink'};
-        sHandle='.cpp';
-
-        if Px.islinux
-            cHandle='.mexa64';
-        elseif ismac
-            cHandle='.mexmaci64';
-        elseif ispc
-            cHandle='.mexw64';
+    function prj=get_current_prj(obj)
+        fid=fopen([obj.curPrjLoc '.current_project']);
+        tline=fgets(fid);
+        fclose(fid);
+        prj=strtrim(strrep(tline,char(10),''));
+    end
+    function obj=find_root_config(obj);
+        if ~isempty(obj.rootconfig)
+            return
         end
+        name='Px.config';
 
-        for i = 1:length(srcs)
-            src=srcs{i};
-            outfile=[obj.selfCompiledDir src cHandle];
-
-            if ~exist(outfile,'file')
-                infile=[obj.selfPath src sHandle];
-                cmd=['mex -outdir ' obj.seflCompiledDir infile];
-                eval(cmd);
+        list={[obj.root 'etc'], obj.home, obj.selfPath};
+        for i = 1:length(list)
+            fname=[list{i} name];
+            if Fil.exist(fname)
+                obj.rootconfig=fname;
+                break
             end
         end
     end
+    function obj=check_deps(obj)
+        Sys.isInstalled('fd');
+        Sys.isInstalled('find');
+        Sys.isInstalled('git');
+    end
+    function obj=save_settings(obj)
+        if ~isempty(obj.rootconfig)
+            return
+        end
+        % XXX TODO
+    end
+%% BASE
+    function out=is_base_installed(obj)
+        out=false;
+        if ~isempty(obj.installDir) && exist(dire,'dir')
+            out=true;
+            obj.installDir=dire;
+            return
+        end
+
+        for i = 1:length(obj.bases)
+            dire=[ obj.bases{i} 'MatBaseTools' filesep];
+            if exist(dire,'dir')
+                out=true;
+                obj.installDir=dire;
+                return
+            end
+        end
+    end
+    function out=find_base_install_dir(obj)
+        for i = 1:length(obj.bases)
+            dire=[ obj.bases{i} 'MatBaseTools' filesep];
+            fname=[dire 'test.tmp'];
+            try
+                if ~exist(dire,'dir')
+                    mkdir(dire);
+                    rmdir(dire);
+                else
+                    fclose(fopen(fname,'w'));
+                    delete(fname);
+                end
+                obj.installDir=dire;
+                out=1;
+                return
+            end
+        end
+    end
+    function obj=download_base_tools(obj)
+        if exist(obj.installDir,'dir')
+            return
+        end
+
+        Px.git_clone(obj.baseUrl,obj.installDir(1:end-1));
+        if ~strcmp(obj.baseV,'master')
+            Px.git_checkout(obj.installDir,obj.baseV);
+        end
+    end
+    function obj=add_base_tools(obj)
+        addpath(obj.installDir);
+    end
+    function obj=compile_base_tools(obj)
+        list={'home_cpp','hostname_cpp','isinstalled_cpp','ln_cpp','readlink_cpp','issymlink_cpp','which_cpp'};
+        for i = 1:length(list)
+            fname=[obj.installDir list{i} '.cpp'];
+            obj.mex_compile(fname,obj.installDir);
+        end
+    end
+%% COMPILE
+    function obj=mex_compile(obj,fname,outdir,bForce)
+        if ~exist('bForce','var') || isempty(bForce)
+            bForce=0;
+        end
+
+        %[dire,file,ext]=Fil.parts(fname);
+        if ismac()
+            han='.mexmaci64';
+        elseif ispc()
+            han='.mexw64';
+        else
+            han='.mexa64';
+        end
+        [~,name]=fileparts(fname);
+
+        outfile=[outdir name han];
+        if exist(outfile,'file') && ~bForce
+            return
+        end
+
+        cmd=['mex -outdir ' outdir ' ' fname];
+        try
+            eval(cmd);
+        catch ME
+            if ~contains(ME.message,'mexa64'' is not a MEX file. ')
+                disp(cmd);
+                rethrow(ME);
+            end
+        end
+    end
+    function obj=compile_prj_files(obj)
+        fnames=Fil.find(obj.prjDir,'.*\.c(pp)?$');
+        if isempty(fnames)
+            return
+        end
+        obj.prjCompiledDir=[obj.rootCompiledDir obj.prj filesep];
+        Dir.mk_p(obj.prjCompiledDir);
+        for i = 1:length(fnames)
+            obj.mex_compile(fnames{i}, obj.prjDir);
+        end
+
+        % XXX TODO
+        % DO THE SAME FOR DEPS
+
+    end
+%% ROOT CONFIG
     function obj=get_root_configs(obj)
         fid = fopen(obj.rootconfig);
+        l=0;
         while true
             line=fgetl(fid);
-            if ~ischar(line); break; end
-
-            if Px.regExp(line,'^[Rr]oot;')
-                c='root';
-            elseif Px.regExp(line,'^[Pp]rojectile')
-                c='bProjectile';
-            elseif Px.regExp(line,'^[Pp]rojectile')
-                c='bGtags';
-            elseif Px.regExp(line,'^[Hh]istory')
-                c='bHistory';
-            elseif Px.regExp(line,'^rootWrkDir')
-                c='rootWrkDir';
-            elseif Px.regExp(line,'^rootSWrkDir')
-                c='rootSWrkDir';
-            elseif Px.regExp(line,'^curPrjLoc')
-                c='curPrjLoc';
-            elseif Px.regExp(line,'^configDir')
-                c='configDir';
-            elseif Px.regExp(line,'^rootCompiledDir')
-                c='rootCompiledDir';
-            else
-                continue
+            l=l+1;
+            if ~ischar(line)
+                break;
+            elseif isempty(line) || startsWith(line,'#') || startsWith(line,'%')
+                continue;
             end
+
+
             spl=strsplit(line,Px.sep);
             spl(cellfun(@isempty,spl))=[];
+            typ=spl{1};
+            typ=[Str.Alph.lower(typ(1)) typ(2:end)];
+
+            blist={'projectile','history'};
+            list={'root','rootCompiledDir','rootWriteDir','rootWrkDir','curPrjLoc','configDir'};
+            if ismember(typ,blist)
+                c=[ 'b' Str.Alph.upper(typ(1)) typ(2:end) ];
+            elseif ismember(typ,list)
+                c=typ;
+            elseif startsWith(typ,'#') || startsWith(typ,'%')
+                continue
+            else
+                error(['Invalid root property typ ' num2str(l) ': ' typ]);
+            end
 
             if length(spl) == 1
                 continue
@@ -212,50 +340,37 @@ methods
             else
                 continue
             end
-            if Px.regExp(obj.(c),'^[0-9]+$');
+            if Str.RE.ismatch(obj.(c),'^[0-9]+$');
                 obj.(c)=str2double(obj.(c));
             end
         end
         fclose(fid);
-        if ~isempty(obj.root)
-            Px.filesepc(obj.root);
-        else
-            error('No root directory found in config');
+        if isempty(obj.root)
+            obj.root=[userpath filesep '.px' filesep];
         end
-
-    end
-    function obj=get_paths()
-    end
-    function obj=get_self_path(obj)
-        fname=mfilename;
-        fdir=mfilename('fullpath');
-        dir=[obj.rootStbDir obj.prj];
-        obj.selfPath=strrep(fdir,fname,'');
+        if isempty(obj.rootWriteDir)
+            obj.rootWriteDir=obj.root;
+        end
     end
     function obj=get_dirs(obj)
+        writeList={'rootWrkDir','rootCompiledDir'};
+        % NEEDS TO BE WRITE
         if isempty(obj.rootWrkDir)
             obj.rootWrkDir ='bin';
         end
         if isempty(obj.rootCompiledDir)
             obj.rootCompiledDir ='cbin';
         end
-        if isempty(obj.rootSWrkDir)
-            obj.rootSWrkDir='stableWorkspaces';
-        end
+
+        % CAN BE JUST READ
         if isempty(obj.rootPrjDir)
             obj.rootPrjDir ='prj';
-        end
-        if isempty(obj.rootStbDir)
-            obj.rootStbDir ='stableProjects';
         end
         if isempty(obj.rootSbinDir)
             obj.rootSbinDir='sbin';
         end
         if isempty(obj.rootHookDir)
             obj.rootHookDir='hooks';
-        end
-        if isempty(obj.libDir)
-            obj.libDir='lib';
         end
         if isempty(obj.libDir)
             obj.libDir='lib';
@@ -270,45 +385,54 @@ methods
         prps={ ...
              ,'rootCompiledDir' ...
              ,'rootWrkDir' ...
-             ,'rootSWrkDir' ...
              ,'rootPrjDir' ...
-             ,'rootStbDir' ...
              ,'rootSbinDir' ...
              ,'rootHookDir' ...
              ,'libDir' ...
              ,'curPrjLoc' ...
         };
         for i = 1:length(prps)
-            obj.(prps{i})=Px.filesepc(obj.(prps{i}));
-            if ~startsWith(obj.(prps{i}), obj.root) && ~Px.regExp(obj.(prps{i}),'^([A-Z]:|/)')
-                obj.(prps{i})=[obj.root obj.(prps{i})];
-                if ~exist(obj.(prps{i}),'dir')
+            obj.(prps{i})=Dir.parse(obj.(prps{i}));
+            if ~startsWith(obj.(prps{i}), obj.root) && ~Str.RE.ismatch(obj.(prps{i}),'^([A-Z]:|/)')
+
+                if ismember(prps{i},writeList)
+                    obj.(prps{i})=[obj.rootWriteDir obj.(prps{i})];
+                else
+                    obj.(prps{i})=[obj.root obj.(prps{i})];
+                end
+                if strcmp(prps{i},'rootPrjDir') &&  ~isempty(obj.linkPrj)
+                    FilDir.ln(obj.linkPrj,obj.rootPrjDir);
+                elseif ~exist(obj.(prps{i}),'dir')
                     mkdir(obj.(prps{i}));
                 end
             end
         end
 
     end
-    function obj=get_prjs(obj,bStable)
-        if bStable
-            obj.prjs=obj.sprjs;
-        else
-            obj.prjs=obj.PRJS;
-        end
+%% PATH
+    function obj=get_self_path(obj)
+        obj.selfPath=obj.parent(mfilename('fullpath'));
+    end
+    function pathlist=get_paths(obj)
+        % XXX get dependency prjCompiledDirs
+        t=strcat(obj.rootSbinDir,obj.sbins);
+        pathlist=transpose({obj.prjCompiledDir obj.selfPath obj.prjWDir t{:}});
+        pathlist(cellfun(@isempty,pathlist))=[];
+    end
+    function obj=get_prjs(obj)
+        obj.prjs=obj.PRJS;
         obj.prjs(ismember(obj.prjs,obj.ignoreDirs))=[];
-        obj.sprjs(ismember(obj.sprjs,obj.ignoreDirs))=[];
     end
     function obj=disp_prjs(obj)
         disp([newline '  r last open poject']);
         fprintf(['%3.0f Sbin Only' newline newline],0);
         fprintf(['%-31s %-25s' newline],'DEVELOPMENT','STABLE');
         for i = 1:length(obj.prjs)
-            if i > length(obj.sprjs)
-                fprintf(['%3.0f %-25s' newline],i, obj.prjs{i});
-            elseif i > length(obj.prjs)
-                fprintf(['    %-25s   %3.0f %-25s' newline],repmat(' ',1,25),i+length(obj.prjs), obj.sprjs{i});
+            if i > length(obj.prjs)
+                %fprintf(['    %-25s   %3.0f %-25s' newline],repmat(' ',1,25),i+length(obj.prjs), obj.sprjs{i});
+                fprintf(['    %-25s   %3.0f %-25s' newline],repmat(' ',1,25),i+length(obj.prjs), ' ');
             else
-                fprintf(['%3.0f %-25s   %3.0f %-25s' newline],i, obj.prjs{i},i+length(obj.prjs), obj.sprjs{i});
+                %fprintf(['%3.0f %-25s   %3.0f %-25s' newline],i, obj.prjs{i},i+length(obj.prjs), ' ');
             end
         end
     end
@@ -316,19 +440,12 @@ methods
         cd(obj.prjDir);
     end
     function obj=get_prj_dir(obj)
-        %CHANGE DIRECTORY TO PROJECT DIRECTORY
-        if obj.stableflag==1 && ~strcmp(obj.prj,'_0_')
-            obj.prjDir=[obj.rootStbDir obj.prj filesep];
-            obj.prjWDir=[obj.rootSWrkDir obj.prj filesep];
-        elseif ~strcmp(obj.prj,'_0_')
-            obj.prjDir=([obj.rootPrjDir obj.prj filesep]);
-            obj.prjWDir=[obj.rootWrkDir obj.prj filesep];
-        end
+        obj.prjDir=([obj.rootPrjDir obj.prj filesep]);
+        obj.prjWDir=[obj.rootWrkDir obj.prj filesep];
     end
     function obj=prompt_prj(obj)
         %PROMPT FOR PROJECT
         val=['12345677890'];
-        obj.stableflag=0;
         while true
             resp=input('Which Project?: ','s');
             if strcmp(resp,'r')
@@ -348,9 +465,6 @@ methods
             elseif mod(resp,1)~=0
                 disp('Invalid response')
                 continue
-            elseif resp > length(obj.prjs) && resp <= (length(obj.prjs) + length(obj.sprjs))
-                obj.stableflag=1;
-                break
             elseif resp > length(obj.prjs)
                 disp('Invalid response')
                 continue
@@ -362,24 +476,18 @@ methods
         end
         if resp==0
             obj.prj='_0_';
-        elseif obj.stableflag==1
-            obj.prj=obj.sprjs{resp-length(obj.prjs)};
         else
             obj.prj=obj.prjs{resp};
         end
     end
     function obj=save_cur_prj(obj)
-        % TODO different for PC
-        if obj.stableflag==1
-            cmd=['echo s:' obj.prj ' > ' obj.curPrjLoc '.current_project'];
-        else
-            cmd=['echo ' obj.prj ' > ' obj.curPrjLoc '.current_project'];
-        end
-        if isunix()
-            unix(cmd);
-        else
-            system(cmd);
-        end
+        fname=[obj.curPrjLoc '.current_project'];
+        Fil.rewrite(fname,obj.prj);
+        %if isunix()
+        %    unix(cmd);
+        %else
+        %    system(cmd);
+        %end
     end
     function obj=run_hooks(obj)
         if exist([obj.rootHookDir obj.prj '.m'])==2
@@ -412,10 +520,11 @@ methods
     end
     function obj=get_prj_options(obj)
         [obj,exitflag]=obj.get_prj_options_helper(1);
-        if exitflag==1 & obj.bEcho
+        bEcho=ismember(obj.mode,{'reset','prompt'});
+        if exitflag==1 & bEcho
             disp(['No project config file found. Checking root config']);
         elseif isempty(obj.Options)
-            if obj.bEcho
+            if bEcho
                 disp(['Config file is empty. Checking root config.']);
             end
             exitflag=1;
@@ -441,8 +550,6 @@ methods
             config=obj.rootconfig;
         end
 
-        %function []=pxs(rootPrjDir,rootStbDir,rootSbinDir)
-        %px symbolic links - handle dependencies
         % TODO
         % check for recursion
 
@@ -478,9 +585,10 @@ methods
 
             % SKIP EMPTY LIMES
             if isempty(tline); continue; end
+            if Str.RE.ismatch(tline,'^ *#'); continue; end
 
             % No indents indicate new block
-            bNew=~bPrjConfig && ~Px.regExp(tline,'^\s') && ~startsWith(tline,configs);
+            bNew=~bPrjConfig && ~Str.RE.ismatch(tline,'^\s') && ~startsWith(tline,configs);
 
             if ~bNew && ~bStart
                 continue
@@ -493,17 +601,17 @@ methods
         fclose(fid);
 
         function [obj,bStart]=get_header(obj,tline)
-            if Px.regExp(tline,'^[rR]oot:')  || Px.regExp(tline,'^curPrjLoc')
+            if Str.RE.ismatch(tline,'^[rR]oot:')  || Str.RE.ismatch(tline,'^curPrjLoc')
                 bStart=0;
                 return
             end
             bStart=1;
-            [code,dire,host,version]=Px.strip_fun(tline,Px.sep,obj.PRJS,obj.sprjs); % a = s,d,e
-            [dest,rdest,site]=Px.sort_fun(code,dire,host,version,obj.rootPrjDir,obj.rootStbDir,obj.libDir,obj.hostname);
+            [code,dire,host,version]=Px.strip_fun(tline,Px.sep,obj.PRJS); % a = s,d,e
+            [dest,rdest,site]=Px.sort_fun(code,dire,host,version,obj.rootPrjDir,obj.libDir,obj.hostname);
             if isempty(dest)
                 return
             end
-            if isempty(obj.prj) || (strcmp(obj.prj,dire(1:end-1)) && ((obj.stableflag==1 && code=='s') || ((obj.stableflag==0 && code=='d'))))
+            if isempty(obj.prj) || (strcmp(obj.prj,dire(1:end-1)))
                 obj.Options(end+1).prj=dest;
                 obj.Options(end).add{1,1}=dest;
                 obj.Options(end).rm{1,1}=dest;
@@ -515,8 +623,8 @@ methods
 
         end
         function obj=get_body(obj,tline)
-            [code,dire,host,version]=Px.strip_fun(tline,Px.sep,obj.PRJS,obj.sprjs);
-            [dest,rdest,site]=Px.sort_fun(code,dire,host,version,obj.rootPrjDir,obj.rootStbDir,obj.libDir,obj.hostname);
+            [code,dire,host,version]=Px.strip_fun(tline,Px.sep,obj.PRJS);
+            [dest,rdest,site]=Px.sort_fun(code,dire,host,version,obj.rootPrjDir,obj.libDir,obj.hostname);
             obj.Options(end+1).add=dest;
             obj.Options(end).rm=rdest;
             obj.Options(end).version=version;
@@ -528,27 +636,13 @@ methods
         end
     end
     function obj=make_wrk_dir(obj)
-        if obj.stableflag==1
-            obj.curWrk=[obj.rootSWrkDir obj.prj filesep];
-        else
-            obj.curWrk=[obj.rootWrkDir obj.prj filesep];
-        end
+        obj.curWrk=[obj.rootWrkDir obj.prj filesep];
         if ~exist(obj.curWrk,'dir')
             mkdir(obj.curWrk);
         end
         if obj.bProjectile && ~exist([obj.curWrk '.projectile'])
-            Px.touch([obj.curWrk '.projectile']);
+            Fil.touch([obj.curWrk '.projectile']);
         end
-    end
-    function obj=make_root_compiled_dir(obj)
-        if ~exist(obj.rootCompiledDir,'dir')
-            mkdir(obj.rootCompiledDir);
-        end
-        obj.selfCompiledDir=[obj.rootCompiledDir '.Px' filesep];
-        if ~exist(obj.selfCompiledDir)
-            mkdir(obj.selfComipledDir);
-        end
-        addpath(obj.selfCompiledDir);
     end
     function obj=parse_prj_options(obj)
         obj.clone_to_lib();
@@ -646,6 +740,10 @@ methods
             end
         end
     end
+    function obj=lock_lib_files(obj)
+        % TODO make read only -> make readonly
+        % chmod -w
+    end
     function obj=gen_gtags(obj)
         if isunix()
             unix([obj.selfPath 'gen_gtags.sh']);
@@ -653,9 +751,17 @@ methods
             disp('Gtags not yet supported for Windows')
         end
     end
+    function obj=echo(obj)
+        switch obj.mode
+        case {'prompt','startup'}
+            display('Done.')
+        case 'reset'
+            display(['Done reloading project ' obj.prj '.']);
+        end
+    end
 end
-methods(Static, Access=private)
-    function [code,dire,host,version]=strip_fun(tline,sep,prjs,sprjs)
+methods(Static, Access=?Px_install)
+    function [code,dire,host,version]=strip_fun(tline,sep,prjs)
         code=[];
         dire=[];
         host=[];
@@ -670,15 +776,15 @@ methods(Static, Access=private)
                 code=str;
             elseif i==2 && length(strs)==3
                 host=str;
-            elseif ismember(filesep,str) || ismember(str,[prjs sprjs]) || (~isempty(code) && code=='l')
-                dire=Px.filesepc(str);
+            elseif ismember(filesep,str) || ismember(str,prjs) || (~isempty(code) && code=='l')
+                dire=Dir.parse(str);
             elseif ismember(i,[3,4])
                 version=str;
             end
         end
     end
 
-    function [dest,rdest,site]=sort_fun(code,dire,host,version,rootPrjDir,rootStbDir,libDir,hostname)
+    function [dest,rdest,site]=sort_fun(code,dire,host,version,rootPrjDir,libDir,hostname)
         dest=[];
         rdest=[];
         site=[];
@@ -686,9 +792,8 @@ methods(Static, Access=private)
             return
         end
 
+        code
         switch code
-            case 's'
-                dest=[rootStbDir dire];
             case 'd'
                 dest=[rootPrjDir dire];
             case 'e'
@@ -705,10 +810,20 @@ methods(Static, Access=private)
                 error(['Invalid label ' code ' for ' dire]);
         end
         if ~isempty(dest)
-            dest=Px.filesepc(dest);
+            dest=Dir.parse(dest);
         end
         if ~isempty(rdest)
-            rdest=Px.filesepc(rdest);
+            rdest=Dir.parse(rdest);
+        end
+    end
+    function out=parent(dire)
+        if endsWith(dire,filesep)
+            dire=dire(1:end-1);
+        end
+        spl=strsplit(dire,filesep);
+        out=strjoin(spl(1:end-1),filesep);
+        if ~endsWith(out,filesep)
+            out=[out filesep];
         end
     end
 end

@@ -42,9 +42,11 @@ methods(Static)
         end
 
         if out==0 && isunix
-            [status,msg]=unix(['git clone -q ' site ' ' direName ]);
+            cmd=['git clone -q ' site ' ' direName ];
+            [status,msg]=unix(cmd);
         elseif out==0
-            [status,msg]=system(['git clone ' site ' ' direName ]);
+            cmd=['git clone ' site ' ' direName ];
+            [status,msg]=system(cmd);
         end
     end
     function hash=git_hash(dire)

@@ -1,9 +1,6 @@
-function px(prj,bStable)
+function px(prj)
     if ~exist('prj','var')
         prj=[];
     end
-    if ~exist('bStable','var')
-        bStable=[];
-    end
-    Px(prj,bStable);
+    Px(prj);
 end

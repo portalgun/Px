@@ -7,47 +7,207 @@
  ▒▓▒░ ░  ░▒▒ ░ ░▓ ░
  ░▒ ░     ░░   ░▒ ░
  ░░        ░    ░
-           ░    ░
+#+END_SRC 
+ Note: currently under active development.
 
  Project Switcher
-    Manages your Matlab project paths and dependencies with ease.
+    Manages your Matlab project paths and dependencies with speed and ease.
 
- example calls:
-           px          % for prompt 
+* Justificaiton
+Matlab has a lot of good things about it, but one thing that is terrible is project management.
+Mostly, I see people in research science resorting to one of the following scenarios:
+- Static set of directories where all code is placed
+- Rerunning genpath everytime a new directory is added
+- projects have flat structure and are cd'd into
 
-           px(prjName) % to swith to project without prompt
+There are problems with all of these, especially as more projects are added, or when trying to integrate somebody else's code. 
 
-           pxr         % to reload current project 
+Things seemed hopeful when the 'import' feature was added.
+However this is broken for object oriented programming where there is no class-level importing;
+all importing has to be done at the level of function level which becomes unwieldy.
+Another ugly thing here is that static methods defined within packages are blind to other static methods without the package namespace.
 
- SETUP INSTRUCTIONS:
-    1. PLACE BELOW IN YOUR STARTUP FILE
-          pxPath='/some/path/to/this/file';
-          run(pxPath);
-    2. SET UP CONFIG FILE 
-          See .config.example
+I've also seen attempts to build project/depency managers and they seemed rather clunky and/or missing features that I wanted.
 
- Directories
-    "root"                The root directory for everything else below.  Specified in first line of config file.
-    projects/             Root project directory where projects under development go.
-    stableProjects/       Root project directory where stable projects go. 
-    workspaces/           This is where a virtual isolated directory will be created for your project on load, with all dependencies. 
-    stableWorkspaces/     Same as above, but for stable projects 
-    toolboxes/            Anything in this directory will always be added to your path.
-    localHooks/           Any matlab function in this directory with the same name as a project will run after Px finishes loading that project
+* Features
+- Perfect project isolation
+- Optimized for speed*
+- Automatic dependency downloading/updating/handling with minimal redundancy
+- Easy **project and hostname specific configuration
+- Project Hooks
+- By-project history management
+- Git integration
+- Auto-compilation of mex files and source isolation from binaries.
+- Auto-generate GTAGS
+- Emacs projectile support
 
-Features: 
-    Hostname specific configuration
-    Project specific configuration
-    Project Hooks
-    By-project matlab history management
-    Git integration
-    Emacs projectile support
-    GTAGS suport
-    Unix-like directory structure
+Does NOT move or modify any of your files. 
 
-Features to come:
-    More minimal setup
+*Most function that would use 'system' or 'unix' has been replaced with C code or a faster tool (such as fd).
+**Two types: configure projects on a development and on a end-user environment level 
 
+* Dependencies
+      git
+      matlab 2017+
+
+A version of MatBaseTools is automatically downloaded, but kept isolated to Px.
+If you want to use MatBasetools yourself, just treat it like any other dependency (See Configuration->Project).
+      
+* Optional dependencies
+- gnu global (gtags) - Px will auto generate gtags 
+
+These things make things faster:
+- Mex support
+- fd   
+- find - if you don't install fd
+
+
+* Setup:
+Setup mex if you havn't already
+
+Run in terminal
+#+BEGIN_src
+ git clone https://github.com/portalgun/Px installDir
 #+END_SRC
-https://www.mathworks.com/matlabcentral/answers/11200-linux-matlab-is-it-possible-to-determine-whether-a-directory-is-a-link
+Where installDir is the path you will be installing.
+Then, run in matlab
+#+BEGIN_src
+ cd installDir
+ Px.installPx(projectDirectory);
+#+END_SRC
+Where projectDirectory is where your existing project files are.
+Px will then set up a directory structure and insert some lines into your startup.m file.
+Your projectDirectory will be moved into this new directory structure if you provide projectDirectory.
+
+* Configuration
+Two types of configuration files exist: root and project.
+** Root
+Root configuration file is for settings that are meant to be applied Px itself, although by project settings can also be defined here.
+Individual root configurations have the following form:
+      setting; value
+Or if you want to make it hostname specific
+      setting; hostname; value
+
+The following basic settings are avaialable:
+    root        Px install location
+    history     Whether to enable by project history in the Matlab command shell.
+                Defaults to 1 = on
+                            0 = off
+    gtags       Whether to a
+                Defaults to 1 = on
+                            0 = off
+Further, any of the listed can customized (see 'Director Structure').
+    prj/    rootPrjDir
+    sbin/   rootSBinDir
+    cbin/   rootCompiledDir
+    hooks/  rootHookDir
+    lib/    libDir
+    etc/    configDir
+    var/    varDir
+    media/  mediaDir
+    data/   dataDir
+
+
+The following also exist, but are not useful to most people
+    projectile  Automatically creates a .projectile file for certain type of emacs integration
+                Defaults to 1 = off
+                            0 = on
+    rootWrite   Secondary Px install location things that will be written. This is useful if project files are read only.
+                I typically like to code on one machine and mount its drive to a test machine over the network with read only permissions
+
+
+Px searches for the root configuration file in the given order
+      installDir/Px.config (only on install, where it will then be moved to installDir/etc)
+      installDir/etc/Px.config
+      installDir/boot/Px.config
+      userpath/$Px.config
+      $HOME/.config/Px.config
+      HOME/Px.config
+
+    TODO examples
+    TODO by-project configs
+
+** Project
+These are are individual files located in the root of each individual project with the name '.px'
+These files are meant to be tracked, as they primarily exist to list dependencies.
+Any dependency in this file will be automatically handled once you switch to this project.
+Individual dependencies are defined
+
+depType;[hostname;]Name[;gitTagBranchOrHash][;AutoUpdate]
+Here anything in brackets is optional. The last two are specific only to depType 't' (see next paragraph).
+
+depType is an individual charcter defining the type of dependency
+    d -> development            A dependency in your project directory that your are developing in tandem.
+                                These are other projects in your project directory
+                                No auto-version control management is done on these dependencies.
+                    
+    l -> lib                    Static dependencies, not meant to be edited, such as other peoples' projects on github.
+                                If the dependency doesn't exist, it will try to download the dependency and install it via git.
+                                Different versions of a code base will be treated/handled as separate dependencies
+                                'Name' should be a url if you want integration with remote repositories.
+                                If not a url, these dependencies can be moved there automatically.
+                                Specify gitTagOrBranchOrHash to specify which tag/branch/commit to checkout.
+                                Specify AutoUpdate 1 if you want to automatically checkout the newest commit (if tracking a branch) each time you switch or reload the project.
+    e -> external/elsewhere     Something that has been installed elsewhere on your machine
+
+'hostname' allows different settings for different computers specified by their hostname.
+
+
+    %TODO EXAMPLES
+
+* Directory Structure
+Things are organized following Unix directory structure:
+    
+    boot/        where px is installed
+    prj/         Root project directory where projects under development go. (Where projects will be moved).
+                 The name of individual directories are read as individual projects, with the directory name as the project name
+    bin/         This is where a virtual isolated directory will be created for your project on load, with all dependencies. 
+    sbin/        Tools that should always be added
+    cbin/        Where compiled mex files will be stored on a by project basis. 
+    hooks/       Where you can write scripts that will run automatically after Px is done initializing.
+    etc/         Location for Px.config and other config files
+    lib/         Where dependencies will be downloaded to, kept
+
+These directories are not used by Px directly
+    tmp/         Where temporary files
+    var/         Where log files will be kept
+    media/       Where figures will be saved
+    data/        Where datat will be saved
+
+
+For logging capabalities, check out my other project 'Pr'
+For by-project figure saving check out the class 'Fig' in 'MatbaseTools'
+
+
+* example calls
+Change project with help from a prompt
+#+BEGIN_src
+    px;
+#+END_src
+
+Reload current project
+#+BEGIN_src
+    pxr;
+#+END_src
+
+List currently active project
+#+BEGIN_src
+    pxc;
+#+END_src
+
+Change to project 'prjName' without prompt
+#+BEGIN_src
+    px('myProject');
+#+END_src
+
+* Related projects
+MatBaseTools - extensions to existing matlab types, including all the optmized versions of system tools used in Px.
+MatPlotTools - Same idea of MatBaseTools but for plotting. Integrates with Px for by-project figure saving.
+Pr - the matlab progress bar of your dreams. Integrates  with Px for logging functionality.
+
+All my other matlab projects use px for dependency and environemnt configuration.
+
+* Features to come
+Session management
+Project testing (like test cases)
 
