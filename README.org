@@ -10,10 +10,9 @@
 #+END_SRC 
 
  Project Switcher\\
-    Manages your Matlab project paths and dependencies with speed and ease.
-\\
+    Manages your Matlab project paths and dependencies with speed and ease. \\\\
  Note: currently under active development. I'm currently using matlab primarily on R2018b and R2017a, so things may not work for earlier versions.\\
-       I'm using it actively on Linux, MacOS, and Windows so should work fine for any of these, although it may be particularly buggy for Windows.
+I'm using it actively on Linux, MacOS, and Windows so should work fine for any of these, although it may be particularly buggy for Windows.
 
 * Justificaiton
 Matlab has a lot of good things about it, but one thing that is terrible is project management.
@@ -21,7 +20,6 @@ Mostly, I see people in research science managing their code in one of the follo
 - Static set of a few directories where all code is placed.
 - Hierarchical project/directory structure, and rerunning genpath or addpath everytime a new directory is added.
 - Projects have flat structure and are cd'd into
-\\
 
 There are problems with all of these, especially as more projects are added, or when trying to integrate somebody else's code.
 Its simplicity is good for playing around, but some fields use Matlab pretty seriously (such as Perceptual Psychology).
@@ -38,25 +36,25 @@ There were certain things that I didn't like about them, or didn't have features
 
 * Features
 - Perfect project isolation
-  -- Only includes what you want included
-  -- Paths are reconfigured whenever switching or reloading a project.
+  + Only includes what you want included
+  + Paths are reconfigured whenever switching or reloading a project.
 - Optimized
-  -- Switching/reloading complex projects take less than a second.
-  -- Most function that would use 'system' or 'unix' has been replaced with C code or a faster tool (such as fd).
-  -- Uses symlinks whenever possible, rather than copying files
+  + Switching/reloading complex projects take less than a second.
+  + Most function that would use 'system' or 'unix' has been replaced with C code or a faster tool (such as fd).
+  + Uses symlinks whenever possible, rather than copying files
 - Abstracted
-  -- You should only need to look at your project files and their individual configurations
-  -- Does NOT move or modify any of your project files (unless you want it to).
+  + You should only need to look at your project files and their individual configurations
+  + Does NOT move or modify any of your project files (unless you want it to).
 - Package management
-  -- Automatic (or manual) dependency installation
+  + Automatic (or manual) dependency installation
 - Git integration
-  -- Optional automatic tracking/updating of git branches
+  + Optional automatic tracking/updating of git branches
 - Easy configuration
-  -- simple syntax
-  -- Global or project specific configuration
-  -- Optional hostname-specific configuration
+  + simple syntax
+  + Global or project specific configuration
+  + Optional hostname-specific configuration
 - Project Hooks
-  -- Run custom code for specific projects when switching or reloading
+  + Run custom code for specific projects when switching or reloading
 - Auto-compilation of mex files and source isolation from binaries.
 
 Experimental Features
@@ -71,74 +69,72 @@ Planned Features
 - OS specific dependencies
 
 * Dependencies
+_Required_
  - git
  - matlab 2017+
 
 A version of MatBaseTools is automatically downloaded, but kept isolated to Px. \\
 If you want to use MatBasetools yourself, just treat it like any other dependency (See Configuration->Project).
-      
-* Optional dependencies
-- gnu global (gtags) - Px will auto generate gtags
 
-These things make things faster:
-- Mex support
-- fd   
-- find - if you don't install fd
+_Optional_
+- GNU global (gtags) - Px will auto generate gtags
+- Mex support (speed)
+- fd (speed)
+- find - if you don't install fd (speed)
 
 * Setup:
-Setup mex if you havn't already
-
-Run in terminal:
+1. Setup mex if you have not already
+2. Run in terminal:
 #+BEGIN_src bash
  git clone https://github.com/portalgun/Px
 #+END_SRC
-
+3. Run in matlab:
 #+BEGIN_src octave
  cd Px % assuming you've cloned it to home
  Px.installPx(installLocation,projectDirectory);
 #+END_SRC
-
-#+RESULTS:
 Where 'installLocation' is where you want to be installing Px.
 A good place is your userpath, which is usually '$HOME/Documents/MATLAB').
 Where projectDirectory is where your existing project files are.
 Px will then set up a directory structure in installLocation/.px and insert some lines into your startup.m file.
-If you don't have a userspace startup file, Px will create you a new one.
+If you don't have a userspace startup file, Px will create you a new one.\\\\
 
 The variable projectDirectory is where you keep your current projects.  If you don't have a place, Px will continue. Because the Px directory structure is supposed to be hands-off, you should provide one.
 Px will not move your files, so you can continue to work with them as you did previously.
 
-
+4. Configure project files
 * Configuration
 Two types of configuration files exist: root and project.
 You probably only need to configure projects.
 ** Project
 Project configurations are individual files located in the base directory of each individual project with the name '.px'
 These files are meant to be tracked, as they primarily exist to deal with dependencies.
-Any dependency in this file will be automatically handled once you switch to this project.
+Any dependency in this file will be automatically handled once you switch to this project.\\\\
+
 Individual dependencies are defined like this:
+#+BEGIN_src
+depType;[hostname;]name[;gitTagBranchOrHash][;AutoUpdate]
+#+END_SRC
 
-    depType;[hostname;]name[;gitTagBranchOrHash][;AutoUpdate]
-
-Here anything in brackets is optional. The last two are specific only to depType 't' (see next paragraph).
-'name' is specific to the depType (also next paragraph).
-'hostname' allows different settings for different computers as specified by their hostname.
+Here anything in brackets is optional. The last two are specific only to depType 't' (see next paragraph).\\
+'name' is specific to the depType (also next paragraph).\\
+'hostname' allows different settings for different computers as specified by their hostname.\\
 
 'depType' is an individual charcter defining the type of dependency
-   | d - development        | A dependency in your project directory that your are developing in tandem.                                                                      |
-   |                        | These are other projects in your project directory                                                                                              |
-   |                        | No auto-version control management is done on these dependencies.                                                                               |
-   |                        | 'name' is name of the dependency, equivalent to the directory name where the dependency is located.                                             |
-   | l - lib                | Static dependencies, not meant to be edited, such as other peoples' projects on github.                                                         |
-   |                        | If the dependency doesn't exist, it will try to download the dependency and install it via git.                                                 |
-   |                        | Different versions of a code base will be treated/handled as separate dependencies                                                              |
-   |                        | 'name' should be a url if you want integration with remote repositories.                                                                        |
-   |                        | If not a url, these dependencies can be moved there automatically.                                                                              |
-   |                        | Specify gitTagOrBranchOrHash to specify which tag/branch/commit to checkout.                                                                    |
-   |                        | Specify AutoUpdate 1 if you want to automatically checkout the newest commit (if tracking a branch) each time you switch or reload the project. |
-   | e - external/elsewhere | Something that has been installed elsewhere on your machine.                                                                                    |
-   |                        | Typically this is anything that has its own installation procedures that you plan on using in matlab and not developing (e.g. PsychToolbox).    |
-   |                        | 'name' is name of the dependency, equivalent to the directory name where the dependency is located.                                             |
+   | d - development | A dependency in your project directory that your are developing in tandem.                                                                      |
+   |                 | These are other projects in your project directory                                                                                              |
+   |                 | No auto-version control management is done on these dependencies.                                                                               |
+   |                 | 'name' is name of the dependency, equivalent to the directory name where the dependency is located.                                             |
+   | l - lib         | Static dependencies, not meant to be edited, such as other peoples' projects on github.                                                         |
+   |                 | If the dependency doesn't exist, it will try to download the dependency and install it via git.                                                 |
+   |                 | Different versions of a code base will be treated/handled as separate dependencies                                                              |
+   |                 | 'name' should be a url if you want integration with remote repositories.                                                                        |
+   |                 | If not a url, these dependencies can be moved there automatically.                                                                              |
+   |                 | Specify gitTagOrBranchOrHash to specify which tag/branch/commit to checkout.                                                                    |
+   |                 | Specify AutoUpdate 1 if you want to automatically checkout the newest commit (if tracking a branch) each time you switch or reload the project. |
+   | e - elsewhere   | Something that has been installed elsewhere on your machine.                                                                                    |
+   |                 | Typically this is anything that has its own installation procedures that you plan on using in matlab and not developing (e.g. PsychToolbox).    |
+   |                 | 'name' is name of the dependency, equivalent to the directory name where the dependency is located.                                             |
 
     %TODO EXAMPLES
 
