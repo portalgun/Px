@@ -56,7 +56,7 @@ methods
         obj.get_self_path();
         bInstalled=obj.get_install_status();
 
-        if length(varargin) > 0
+        if length(varargin) > 0 && ~isempty(varargin{1})
             obj.mode=varargin{1};
         else
             obj.mode='prompt';
@@ -107,7 +107,7 @@ methods
         obj.save_cur_prj();
 
         %restoredefaultpath;
-        cd(obj.selfPath);
+        addpath(obj.selfPath);
 
         obj.get_prj_options();
         obj.make_wrk_dir();
@@ -146,7 +146,7 @@ methods
         if ~out
             out=obj.find_base_install_dir();
             if ~out
-                error('No valid install directory')
+                error('No valid install directory');
             end
             obj.download_base_tools();
         end
@@ -156,6 +156,9 @@ methods
     function obj=config_root(obj);
         obj.hostname=Sys.hostname();
         obj.home=Dir.home();
+        if ~endsWith(obj.home,filesep)
+            obj.home=[obj.home filesep];
+        end
         obj.get_root();
 
         obj.find_root_config();
@@ -174,7 +177,7 @@ methods
         fid=fopen(fname);
         tline=fgets(fid);
         fclose(fid);
-        if isempty(tline)
+        if isempty(tline) || isequal(tline,-1)
             prj=[];
             return
         end
@@ -186,7 +189,7 @@ methods
         end
         name='Px.config';
 
-        list={[obj.root 'etc'], obj.home, obj.selfPath};
+        list={[obj.root 'etc' filesep], obj.home, obj.selfPath};
         for i = 1:length(list)
             fname=[list{i} name];
             if Fil.exist(fname)
@@ -294,15 +297,21 @@ methods
         end
     end
     function obj=compile_prj_files(obj)
-        fnames=Fil.find(obj.prjDir,'.*\.c(pp)?$');
+        [fnames]=Fil.find(obj.prjDir,'.*\.c(pp)?$');
         if isempty(fnames)
             return
         end
         obj.prjCompiledDir=[obj.rootCompiledDir obj.prj filesep];
         Dir.mk_p(obj.prjCompiledDir);
+        old=pwd;
+        cl=onCleanup(@() cd(old));
         for i = 1:length(fnames)
-            obj.mex_compile(fnames{i}, obj.prjDir);
+            [dire,fname,ext]=Fil.parts(fnames{i});
+            cd([obj.prjDir dire]);
+            fname=[fname ext];
+            obj.mex_compile(fname, obj.prjCompiledDir);
         end
+        cd(old);
 
         % XXX TODO
         % DO THE SAME FOR DEPS
@@ -320,7 +329,6 @@ methods
             elseif isempty(line) || startsWith(line,'#') || startsWith(line,'%')
                 continue;
             end
-
 
             spl=strsplit(line,Px.sep);
             spl(cellfun(@isempty,spl))=[];
@@ -434,13 +442,15 @@ methods
     function obj=disp_prjs(obj)
         disp([newline '  r last open poject']);
         fprintf(['%3.0f Sbin Only' newline newline],0);
-        fprintf(['%-31s %-25s' newline],'DEVELOPMENT','STABLE');
+        %fprintf(['%-31s %-25s' newline],'DEVELOPMENT','STABLE');
+        fprintf(['%-31s' newline],'PROJECTS')
         for i = 1:length(obj.prjs)
             if i > length(obj.prjs)
                 %fprintf(['    %-25s   %3.0f %-25s' newline],repmat(' ',1,25),i+length(obj.prjs), obj.sprjs{i});
                 fprintf(['    %-25s   %3.0f %-25s' newline],repmat(' ',1,25),i+length(obj.prjs), ' ');
             else
                 %fprintf(['%3.0f %-25s   %3.0f %-25s' newline],i, obj.prjs{i},i+length(obj.prjs), ' ');
+                fprintf(['%3.0f %-25s ' newline],i, obj.prjs{i});
             end
         end
     end
@@ -760,7 +770,6 @@ methods
         end
     end
     function obj=echo(obj)
-        obj.mode
         switch obj.mode
         case {'prompt','startup'}
             display('Done.')

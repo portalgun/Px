@@ -10,7 +10,7 @@
 #+END_SRC 
 
  Project Switcher\\
-    Manages your Matlab project paths and dependencies with speed and ease. \\\\
+    Manages your Matlab project paths and dependencies with speed and ease.\\\\
  Note: currently under active development. I'm currently using matlab primarily on R2018b and R2017a, so things may not work for earlier versions.\\
 I'm using it actively on Linux, MacOS, and Windows so should work fine for any of these, although it may be particularly buggy for Windows.
 
@@ -57,12 +57,12 @@ There were certain things that I didn't like about them, or didn't have features
   + Run custom code for specific projects when switching or reloading
 - Auto-compilation of mex files and source isolation from binaries.
 
-Experimental Features
+_Experimental Features_
 - Auto-generate GTAGS (GNU Global)
 - By-project history management
 - Emacs projectile support
 
-Planned Features
+_Planned Features_
 - Custom ignore directories (gitignore syntax)
 - Session management
 - Project testing (like test cases)
@@ -70,8 +70,8 @@ Planned Features
 
 * Dependencies
 _Required_
- - git
- - matlab 2017+
+ - Git
+ - Matlab 2017+
 
 A version of MatBaseTools is automatically downloaded, but kept isolated to Px. \\
 If you want to use MatBasetools yourself, just treat it like any other dependency (See Configuration->Project).
@@ -85,22 +85,22 @@ _Optional_
 * Setup:
 1. Setup mex if you have not already
 2. Run in terminal:
-#+BEGIN_src bash
- git clone https://github.com/portalgun/Px
-#+END_SRC
+    #+BEGIN_src bash
+    git clone https://github.com/portalgun/Px
+    #+END_SRC
 3. Run in matlab:
-#+BEGIN_src octave
- cd Px % assuming you've cloned it to home
- Px.installPx(installLocation,projectDirectory);
-#+END_SRC
-Where 'installLocation' is where you want to be installing Px.
-A good place is your userpath, which is usually '$HOME/Documents/MATLAB').
-Where projectDirectory is where your existing project files are.
-Px will then set up a directory structure in installLocation/.px and insert some lines into your startup.m file.
-If you don't have a userspace startup file, Px will create you a new one.\\\\
+    #+BEGIN_src octave
+    cd Px % assuming you've cloned it to home
+    Px.installPx(installLocation,projectDirectory);
+    #+END_SRC
+    Where 'installLocation' is where you want to be installing Px.
+    A good place is your userpath, which is usually '$HOME/Documents/MATLAB').
+    Where projectDirectory is where your existing project files are.
+    Px will then set up a directory structure in installLocation/.px and insert some lines into your startup.m file.
+    If you don't have a userspace startup file, Px will create you a new one.\\\\
 
-The variable projectDirectory is where you keep your current projects.  If you don't have a place, Px will continue. Because the Px directory structure is supposed to be hands-off, you should provide one.
-Px will not move your files, so you can continue to work with them as you did previously.
+    The variable projectDirectory is where you keep your current projects.  If you don't have a place, Px will continue. Because the Px directory structure is supposed to be hands-off, you should provide one.
+    Px will not move your files, so you can continue to work with them as you did previously.
 
 4. Configure project files
 * Configuration

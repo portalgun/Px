@@ -15,6 +15,7 @@ methods
             error('Px Install: directory required for first parameter');
         end
         installLoc=varargin{1};
+
         if length(varargin) > 1
             prjLoc=varargin{2};
         else
