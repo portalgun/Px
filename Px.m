@@ -33,6 +33,7 @@ properties
     bGtags=false
 end
 properties(Hidden)
+    bTest
     mode
     selfPath
     hostname
@@ -56,6 +57,11 @@ methods
         obj.get_self_path();
         bInstalled=obj.get_install_status();
 
+        if length(varargin) > 1 && ismember('bTest',varargin);
+            varargin(ismember(varargin,'bTest'))=[];
+            obj.bTest=1;
+        end
+
         if length(varargin) > 0 && ~isempty(varargin{1})
             obj.mode=varargin{1};
         else
@@ -65,6 +71,11 @@ methods
             error('Px already installed');
         elseif strcmp(obj.mode,'installPx')
             obj.install_px(varargin{2:end});
+            return
+        elseif strcmp(obj.mode,'reinstallPx')
+            clear Px Px_util Px_install;
+            rehash path;
+            obj.reinstall_px(varargin{2:end});
             return
         elseif strcmp(obj.mode,'install2')
             obj.selfPath=varargin{2};
@@ -103,6 +114,7 @@ methods
         end
         obj.get_prj_dir();
         obj.prjconfig=[obj.prjDir '.px'];
+        Fil.touch(obj.prjconfig);
 
         obj.save_cur_prj();
 
@@ -130,7 +142,7 @@ methods
 
         % NEEDS TO BE DONE LAST TO NOT DISRUPT BASE TOOLS
         pathlist=obj.get_paths();
-        Path.add(pathlist,Path.default());
+        Path.replace(pathlist,Path.default(),obj.selfPath);
 
         obj.run_hooks();
 
@@ -149,6 +161,7 @@ methods
                 error('No valid install directory');
             end
             obj.download_base_tools();
+
         end
         obj.compile_base_tools();
         obj.add_base_tools();
@@ -212,9 +225,8 @@ methods
 %% BASE
     function out=is_base_installed(obj)
         out=false;
-        if ~isempty(obj.installDir) && exist(dire,'dir')
+        if ~isempty(obj.installDir) && exist(obj.installDir,'dir')==7
             out=true;
-            obj.installDir=dire;
             return
         end
 
@@ -250,7 +262,12 @@ methods
             return
         end
 
-        Px.git_clone(obj.baseUrl,obj.installDir(1:end-1));
+        obj.installDir
+        if obj.bTest
+            copyfile('/home/dambam/Documents/MATLAB/.px/prj/BaseTools',obj.installDir);
+        else
+            Px.git_clone(obj.baseUrl,obj.installDir(1:end-1));
+        end
         if ~strcmp(obj.baseV,'master')
             Px.git_checkout(obj.installDir,obj.baseV);
         end
@@ -432,7 +449,7 @@ methods
     function pathlist=get_paths(obj)
         % XXX get dependency prjCompiledDirs
         t=strcat(obj.rootSbinDir,obj.sbins);
-        pathlist=transpose({obj.prjCompiledDir obj.selfPath obj.prjWDir t{:}});
+        pathlist=transpose({obj.prjCompiledDir obj.prjWDir t{:}});
         pathlist(cellfun(@isempty,pathlist))=[];
     end
     function obj=get_prjs(obj)

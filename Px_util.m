@@ -27,6 +27,9 @@ methods(Static)
     function installPx(varargin)
         Px('installPx',varargin{:});
     end
+    function reinstallPx(varargin)
+        Px('reinstallPx',varargin{:});
+    end
     function prj=get_config_dir()
         % XXX TODO
     end
@@ -53,7 +56,12 @@ methods(Static, Hidden)
     function test_install()
         prj='~/Cloud/Code/mat/prj/';
         %prj=[userpath filesep 'myProjects'];;
-        Px.installPx([userpath filesep],prj);
+        Px.installPx([userpath filesep],prj,'bTest');
+    end
+    function test_reinstall()
+        prj='~/Cloud/Code/mat/prj/';
+        %prj=[userpath filesep 'myProjects'];;
+        Px.reinstallPx([userpath filesep],prj,'bTest');
     end
 end
 methods(Static, Access={?Px,?Px_hist})
