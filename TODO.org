@@ -1,38 +1,68 @@
-- recursive dependencies
-- get home directory in windows
-- setup
-    bHistory
-    create config
-    install in startup file
-    uninstall from startup file
+submodules and dependencies?
+
+base tools
+    CfgRd
+    RW
+split out git into own thing? -> matGit
+
+"environmental variables" -> px config file
+
+config file naming 
+    host.prj.lib.config
+log naming
+    host.prj.lib.subr.log
+
+by project options
+   data
+
+optional dependencies section in config
+    prompt to download
+history problem
+      broken symlinks can act as non-existant files -> problem with 
+
+more options
+      bTmp
+      bVar
+      bMedia
+      bData
+
+
+if updating removing, make sure that dependencies are removed too
+
+(p) prj
+(s) src  <- tools
+(l) lib 
+(e) etc
+(t) tlb  (remove?)
+(m) media <- default save directory
+(v) var <- logging
+    dat
+(?) tmp 
 
 - default root should be ../
-- i option (???) - ignore toolbox
-- libraries directory l:
-- make stable m files read only
-- do gtags within workspaces
+- get home directory in windows
+  
+- recursive dependencies
+
 - link toolboxes if marked as such in config
 - +modules?
-
-* GIT
-- checkout hash
-- get current hash
-- add git tag/branch option
-
-[prjtype]:[directory]:[hash/tag]:[url]
-  prjtype - 1 letter code
-directory - starts with . or /
-url       - has periods not at start
-if directory empty
-    checkout
-    put it into lib
-if hash/tag empty
-    assume master
-          put into config
-
-
-get rid of stable directories, just name them differently
-    prj__hash
+- do gtags within workspaces?
+* logging
+timestamps
+capturing output...
+    probably matlab bulitins
+run script from shell command
+* Dep handler
+- indep px dep handler
+  for people who don't want to use px, but want to use packages
+** px setup script
+download px from github packages
+** px packaging
+create setup script, which specifies which px packaged version
+* media handler
+default save location
+* var handler
+crashdumps
 * History  NOTES
 %com.mathworks.mlservices.MLCommandHistoryServices.getAllHistory
 %com.mathworks.mlservices.MLCommandHistoryServices.getSessionHistory
@@ -70,5 +100,4 @@ com.mathworks.mlservices.MLCommandHistoryServices.add('px')
 ?repeat
 ?error
 ?batch
-
 

@@ -1,320 +1,473 @@
-classdef Px < handle
+classdef Px < handle & Px_util & Px_git & Px_hist & Px_install
+% PERFORMANCE
+% combine fd commands
+%
+% base toools downlaod and compile directory
 properties
     root
     %root='~/Code/mat/'
+    libDir
+    rootWriteDir
     rootWrkDir
-    rootSWrkDir
     rootPrjDir
-    rootStbDir
-    rootTlbxDir
+    rootSbinDir
     rootHookDir
+    rootCompiledDir
+    configDir
+    curPrjLoc
 
-    ignoreDirs={'AR','_AR','_old','.git'}
+    ignoreDirs={'AR','_AR','_old','.git','.px','.svn'}
 
     prjs
-    sprjs
     prj
-    tlbxs
+    sbins
 
-    Options
+    Options  % 1 - paths
     rootconfig
     prjconfig
     prjDir
     prjWDir
-    bHistory=1
+    prjCompiledDir
+    bHistory=true
+    bProjectile=false
+    bGtags=false
 end
 properties(Hidden)
-    bEcho
+    bTest
+    mode
     selfPath
-    stableflag
     hostname
     curWrk
+    curCmp
+    wrkDirs
     matroot
+    PRJS
+    home
+    installDir
+    bases
+    linkPrj
 end
 properties(Constant)
-    sep=';';
+    sep=char(59)
+    baseUrl='https://github.com/portalgun/MatBaseTools'
+    baseV='master'
 end
 methods
-    function obj=Px(prj,bStable,bEcho)
-        if ~exist('bStable','var') || isempty(bStable)
-            bStable=0;
-        end
-        if ~exist('bEcho') || isempty(bEcho)
-            obj.bEcho=1;
-        else
-            obj.bEcho=bEcho;
-        end
-
-
-        obj.hostname=Px.get_hostname();
+    function obj=Px(varargin)
         obj.get_self_path();
-        obj.rootconfig=[obj.selfPath '.config'];
-        if ~exist(obj.rootconfig,'file')
-            obj.setup();
+        bInstalled=obj.get_install_status();
+
+        if length(varargin) > 1 && ismember('bTest',varargin);
+            varargin(ismember(varargin,'bTest'))=[];
+            obj.bTest=1;
         end
 
-        obj.get_root_configs();
-        obj.get_dirs();
-        addpath(obj.selfPath);
-        if exist('prj','var') && ~isempty(prj) && (isnumeric(prj) || strcmp(prj,'_0_'))
-            prj=Px.get_current();
+        if length(varargin) > 0 && ~isempty(varargin{1})
+            obj.mode=varargin{1};
+        else
+            obj.mode='prompt';
         end
+        if strcmp(obj.mode,'installPx') && bInstalled
+            error('Px already installed');
+        elseif strcmp(obj.mode,'installPx')
+            obj.install_px(varargin{2:end});
+            return
+        elseif strcmp(obj.mode,'reinstallPx')
+            clear Px Px_util Px_install;
+            rehash path;
+            obj.reinstall_px(varargin{2:end});
+            return
+        elseif strcmp(obj.mode,'install2')
+            obj.selfPath=varargin{2};
+            obj.root=varargin{3};
+            obj.rootconfig=varargin{4};
+            obj.linkPrj=varargin{5};
+
+            obj.setup_base_tools();
+            obj.config_root();
+            return
+        elseif ~bInstalled
+            error('Not installed');
+        elseif length(varargin) > 1
+            opts=struct(varargin{2:end});
+        end
+
+        obj.setup_base_tools();
+        obj.config_root();
+        % during installPx
+
+        if  ismember(obj.mode,{'install2','reset','startup','get_current'})
+            prj=obj.get_current_prj();
+        end
+        if strcmp(obj.mode,'get_current')
+            return
+        end
+
+        obj.PRJS =Px.getProjects(obj.rootPrjDir);
 
         if ~exist('prj','var') || isempty(prj)
-            obj.get_prjs(bStable);
+            obj.get_prjs();
             obj.disp_prjs();
             obj.prompt_prj();
-        elseif  startsWith(prj,'s:')
-            obj.prj=strrep(prj,'s:','');
-            obj.stableflag=1;
         else
             obj.prj=prj;
-            obj.stableflag=0;
-        end
-        if bStable
-            obj.stableflag=1;
         end
         obj.get_prj_dir();
         obj.prjconfig=[obj.prjDir '.px'];
+        Fil.touch(obj.prjconfig);
 
         obj.save_cur_prj();
 
-        restoredefaultpath;
+        %restoredefaultpath;
         addpath(obj.selfPath);
 
         obj.get_prj_options();
         obj.make_wrk_dir();
         obj.parse_prj_options();
 
-
-        Px.addToPath(obj.prjWDir);
-
-
-        %GETTOOLBOXES
-        obj.tlbxs=Px.getProjects(obj.rootTlbxDir,1);
-
-        %ADD DEPENDENCIES/REMOVE EXLUDED TOOLBOXES
-        % XXX
-        %tlbxs = parseSettings(prj,rootPrjDir,rootStbDir,tlbxs)
-
-        %ADD TOOLBOXES IF NOT ADDED ALREADY, UNLESS EXCLUDED
-        for i = 1:length(obj.tlbxs)
-            if ~strcmp(obj.prj,obj.tlbxs{i})
-               Px.addToPath([obj.rootTlbxDir obj.tlbxs{i}]);
-            end
+        %GETSBIN
+        obj.sbins=Px.getProjects(obj.rootSbinDir,1);
+        if ~isempty([obj.Options.rm])
+            obj.sbins(ismember(obj.sbins,obj.Options.rm))=[];
         end
+        obj.sbins(ismember(obj.sbins,obj.prj))=[];
 
-        obj.cd_prj();
-
-        obj.bHistory
         if obj.bHistory
             obj.make_history();
         end
+        if obj.bGtags
+            obj.gen_gtags();
+        end
+        obj.compile_prj_files();
+
+        % NEEDS TO BE DONE LAST TO NOT DISRUPT BASE TOOLS
+        pathlist=obj.get_paths();
+        Path.replace(pathlist,Path.default(),obj.selfPath);
 
         obj.run_hooks();
-        if obj.bEcho
-            display('Done.')
+
+        obj.cd_prj();
+        obj.echo();
+    end
+    function obj=setup_base_tools(obj)
+        % BASE TOOLS
+        %dire=[obj.parent(obj.self_path) 'cbin' etc;
+
+        obj.bases={obj.selfPath, [userpath filesep '.px' filesep]};
+        out=obj.is_base_installed();
+        if ~out
+            out=obj.find_base_install_dir();
+            if ~out
+                error('No valid install directory');
+            end
+            obj.download_base_tools();
+
+        end
+        obj.compile_base_tools();
+        obj.add_base_tools();
+    end
+    function obj=config_root(obj);
+        obj.hostname=Sys.hostname();
+        obj.home=Dir.home();
+        if ~endsWith(obj.home,filesep)
+            obj.home=[obj.home filesep];
+        end
+        obj.get_root();
+
+        obj.find_root_config();
+        obj.get_root_configs();
+        obj.get_dirs();
+        obj.save_settings();
+    end
+    function get_root(obj,opts)
+        obj.root=obj.parent(obj.selfPath);
+    end
+    function prj=get_current_prj(obj)
+        fname=[obj.curPrjLoc '.current_project'];
+        if ~exist(fname,'file');
+            Fil.touch(fname);
+        end
+        fid=fopen(fname);
+        tline=fgets(fid);
+        fclose(fid);
+        if isempty(tline) || isequal(tline,-1)
+            prj=[];
+            return
+        end
+        prj=strtrim(strrep(tline,char(10),''));
+    end
+    function obj=find_root_config(obj);
+        if ~isempty(obj.rootconfig)
+            return
+        end
+        name='Px.config';
+
+        list={[obj.root 'etc' filesep], obj.home, obj.selfPath};
+        for i = 1:length(list)
+            fname=[list{i} name];
+            if Fil.exist(fname)
+                obj.rootconfig=fname;
+                break
+            end
         end
     end
-    function obj=setup(obj)
+    function obj=check_deps(obj)
+        Sys.isInstalled('fd');
+        Sys.isInstalled('find');
+        Sys.isInstalled('git');
     end
+    function obj=save_settings(obj)
+        if ~isempty(obj.rootconfig)
+            return
+        end
+        % XXX TODO
+    end
+%% BASE
+    function out=is_base_installed(obj)
+        out=false;
+        if ~isempty(obj.installDir) && exist(obj.installDir,'dir')==7
+            out=true;
+            return
+        end
+
+        for i = 1:length(obj.bases)
+            dire=[ obj.bases{i} 'MatBaseTools' filesep];
+            if exist(dire,'dir')
+                out=true;
+                obj.installDir=dire;
+                return
+            end
+        end
+    end
+    function out=find_base_install_dir(obj)
+        for i = 1:length(obj.bases)
+            dire=[ obj.bases{i} 'MatBaseTools' filesep];
+            fname=[dire 'test.tmp'];
+            try
+                if ~exist(dire,'dir')
+                    mkdir(dire);
+                    rmdir(dire);
+                else
+                    fclose(fopen(fname,'w'));
+                    delete(fname);
+                end
+                obj.installDir=dire;
+                out=1;
+                return
+            end
+        end
+    end
+    function obj=download_base_tools(obj)
+        if exist(obj.installDir,'dir')
+            return
+        end
+
+        obj.installDir
+        if obj.bTest
+            copyfile('/home/dambam/Documents/MATLAB/.px/prj/BaseTools',obj.installDir);
+        else
+            Px.git_clone(obj.baseUrl,obj.installDir(1:end-1));
+        end
+        if ~strcmp(obj.baseV,'master')
+            Px.git_checkout(obj.installDir,obj.baseV);
+        end
+    end
+    function obj=add_base_tools(obj)
+        addpath(obj.installDir);
+    end
+    function obj=compile_base_tools(obj)
+        list={'home_cpp','hostname_cpp','isinstalled_cpp','ln_cpp','readlink_cpp','issymlink_cpp','which_cpp'};
+        for i = 1:length(list)
+            fname=[obj.installDir list{i} '.cpp'];
+            obj.mex_compile(fname,obj.installDir);
+        end
+    end
+%% COMPILE
+    function obj=mex_compile(obj,fname,outdir,bForce)
+        if ~exist('bForce','var') || isempty(bForce)
+            bForce=0;
+        end
+
+        %[dire,file,ext]=Fil.parts(fname);
+        if ismac()
+            han='.mexmaci64';
+        elseif ispc()
+            han='.mexw64';
+        else
+            han='.mexa64';
+        end
+        [~,name]=fileparts(fname);
+
+        outfile=[outdir name han];
+        if exist(outfile,'file') && ~bForce
+            return
+        end
+
+        cmd=['mex -outdir ' outdir ' ' fname];
+        try
+            eval(cmd);
+        catch ME
+            if ~contains(ME.message,'mexa64'' is not a MEX file. ')
+                disp(cmd);
+                rethrow(ME);
+            end
+        end
+    end
+    function obj=compile_prj_files(obj)
+        [fnames]=Fil.find(obj.prjDir,'.*\.c(pp)?$');
+        if isempty(fnames)
+            return
+        end
+        obj.prjCompiledDir=[obj.rootCompiledDir obj.prj filesep];
+        Dir.mk_p(obj.prjCompiledDir);
+        old=pwd;
+        cl=onCleanup(@() cd(old));
+        for i = 1:length(fnames)
+            [dire,fname,ext]=Fil.parts(fnames{i});
+            cd([obj.prjDir dire]);
+            fname=[fname ext];
+            obj.mex_compile(fname, obj.prjCompiledDir);
+        end
+        cd(old);
+
+        % XXX TODO
+        % DO THE SAME FOR DEPS
+
+    end
+%% ROOT CONFIG
     function obj=get_root_configs(obj)
         fid = fopen(obj.rootconfig);
+        l=0;
         while true
             line=fgetl(fid);
-            if ~ischar(line); break; end
-
-            if Px.regExp(line,'^[Rr]oot;')
-                c='root';
-            elseif Px.regExp(line,'^[Hh]istory')
-                c='bHistory';
-            elseif Px.regExp(line,'^rootWrkDir')
-                c='rootWrkDir';
-            elseif Px.regExp(line,'^rootSWrkDir')
-                c='rootSWrkDir';
-            else
-                continue
+            l=l+1;
+            if ~ischar(line)
+                break;
+            elseif isempty(line) || startsWith(line,'#') || startsWith(line,'%')
+                continue;
             end
+
             spl=strsplit(line,Px.sep);
             spl(cellfun(@isempty,spl))=[];
+            typ=spl{1};
+            typ=[Str.Alph.lower(typ(1)) typ(2:end)];
+
+            blist={'projectile','history'};
+            list={'root','rootCompiledDir','rootWriteDir','rootWrkDir','curPrjLoc','configDir'};
+            if ismember(typ,blist)
+                c=[ 'b' Str.Alph.upper(typ(1)) typ(2:end) ];
+            elseif ismember(typ,list)
+                c=typ;
+            elseif startsWith(typ,'#') || startsWith(typ,'%')
+                continue
+            else
+                error(['Invalid root property typ ' num2str(l) ': ' typ]);
+            end
 
             if length(spl) == 1
                 continue
-            elseif length(spl) == 2 && exist(spl{2},'dir')
+            elseif length(spl) == 2 
                 obj.(c)=spl{2};
             elseif length(spl) == 3 && strcmp(spl{2},obj.hostname)
                 obj.(c)=spl{3};
             else
                 continue
             end
-            if Px.regExp(obj.(c),'[0-9]+');
+            if Str.RE.ismatch(obj.(c),'^[0-9]+$');
                 obj.(c)=str2double(obj.(c));
             end
         end
         fclose(fid);
-        if ~isempty(obj.root)
-            Px.filesepc(obj.root);
-        else
-            error('No root directory found in config');
+        if isempty(obj.root)
+            obj.root=[userpath filesep '.px' filesep];
         end
-
-    end
-    function obj=make_history(obj)
-        obj.save_history();
-        %/home/dambam/.matlab/java/jar/mlservices.jar
-        %% MAKE history files
-        prjdir=obj.prjDir;
-        mdir=Px.filesepc(prefdir);
-
-        names={'history.m','History.xml','History.bak'};
-        % History.xml = desktop command history
-
-        for i = 1:length(names)
-            history_fun(names{i},prjdir,mdir);
+        if isempty(obj.rootWriteDir)
+            obj.rootWriteDir=obj.root;
         end
-
-        obj.reload_history();
-
-        function history_fun(name,prjdir,mdir)
-            pHist=[prjdir '.' name];
-            mHist=[mdir name];
-            if ~exist(mHist,'file')
-                error(['History file ' name 'does not exist']);
-            end
-            if ~exist(pHist,'file')
-                Px.touch(pHist);
-            end
-            bSym=Px.issymboliclink(mHist);
-            if bSym && strcmp(Px.linksource(mHist),pHist);
-                return
-            elseif bSym
-                delete(mHist);
-            else
-                movefile(mHist,[mHist '_bak']);
-            end
-
-            Px.LN(pHist,mHist);
-
-
-        end
-    end
-    function obj=history2string(obj,dire)
-        history = string(fileread(fullfile(dire, 'History.xml')));
-    end
-    function obj=clear_history(obj)
-        com.mathworks.mlservices.MLCommandHistoryServices.removeAll;
-    end
-    function obj=save_history(obj)
-        com.mathworks.mlservices.MLCommandHistoryServices.save;
-    end
-    function obj=reload_history(obj)
-        file=java.io.File(com.mathworks.util.FileUtils.getPreferencesDirectory, "History.xml");
-        com.mathworks.mde.cmdhist.AltHistory.load(file,false);
-    end
-    function obj=load_history_from_file(obj)
-        mdir=Px.filesepc(prefdir);
-        mHist=[mdir 'history.m'];
-    end
-    function obj=restore_original_history(obj)
-        dire=prefdir;
-        mHistM=[dire 'history.m'];
-        mHistX=[dire 'History.xml'];
-        mHistB=[dire 'History.bak'];
-
-        % DELETE SYMS
-        if issymboliclink(mHistM)
-            delete(mHistM);
-        end
-        if issymboliclink(mHistX)
-            delete(mHistX);
-        end
-        if issymboliclink(mHistB)
-            delete(mHistB);
-        end
-
-        % Restore OLD
-        movefile([mHistM '_bak'],mHistM);
-        movefile([mHistX '_bak'],mHistX);
-        movefile([mHistB '_bak'],mHistB);
-    end
-    function obj=get_paths()
-    end
-    function obj=get_self_path(obj)
-        fname=mfilename;
-        fdir=mfilename('fullpath');
-        dir=[obj.rootStbDir obj.prj];
-        obj.selfPath=strrep(fdir,fname,'');
-    end
-    function obj=add_self_path(obj)
     end
     function obj=get_dirs(obj)
+        writeList={'rootWrkDir','rootCompiledDir'};
+        % NEEDS TO BE WRITE
         if isempty(obj.rootWrkDir)
-            obj.rootWrkDir ='workspaces';
+            obj.rootWrkDir ='bin';
         end
-        if isempty(obj.rootSWrkDir)
-            obj.rootSWrkDir='stableWorkspaces';
+        if isempty(obj.rootCompiledDir)
+            obj.rootCompiledDir ='cbin';
         end
+
+        % CAN BE JUST READ
         if isempty(obj.rootPrjDir)
-            obj.rootPrjDir ='projects';
+            obj.rootPrjDir ='prj';
         end
-        if isempty(obj.rootStbDir)
-            obj.rootStbDir ='stableProjects';
-        end
-        if isempty(obj.rootTlbxDir)
-            obj.rootTlbxDir='toolboxes';
+        if isempty(obj.rootSbinDir)
+            obj.rootSbinDir='sbin';
         end
         if isempty(obj.rootHookDir)
-            obj.rootHookDir='localHooks';
+            obj.rootHookDir='hooks';
+        end
+        if isempty(obj.libDir)
+            obj.libDir='lib';
+        end
+        if isempty(obj.curPrjLoc)
+            obj.curPrjLoc=obj.selfPath;
+        end
+        if isempty(obj.configDir)
+            obj.configDir='etc';
         end
 
         prps={ ...
+             ,'rootCompiledDir' ...
              ,'rootWrkDir' ...
-             ,'rootSWrkDir' ...
              ,'rootPrjDir' ...
-             ,'rootStbDir' ...
-             ,'rootTlbxDir' ...
+             ,'rootSbinDir' ...
              ,'rootHookDir' ...
+             ,'libDir' ...
+             ,'curPrjLoc' ...
         };
         for i = 1:length(prps)
-            obj.(prps{i})=Px.filesepc(obj.(prps{i}));
-            if ~startsWith(obj.(prps{i}), obj.root) && ~Px.regExp(obj.(prps{i}),'^([A-Z]:|/)')
-                obj.(prps{i})=[obj.root obj.(prps{i})];
-                if ~exist(obj.(prps{i}),'dir')
+            obj.(prps{i})=Dir.parse(obj.(prps{i}));
+            if ~startsWith(obj.(prps{i}), obj.root) && ~Str.RE.ismatch(obj.(prps{i}),'^([A-Z]:|/)')
+
+                if ismember(prps{i},writeList)
+                    obj.(prps{i})=[obj.rootWriteDir obj.(prps{i})];
+                else
+                    obj.(prps{i})=[obj.root obj.(prps{i})];
+                end
+                if strcmp(prps{i},'rootPrjDir') &&  ~isempty(obj.linkPrj)
+                    FilDir.ln(obj.linkPrj,obj.rootPrjDir);
+                elseif ~exist(obj.(prps{i}),'dir')
                     mkdir(obj.(prps{i}));
                 end
             end
         end
 
-        if ispc
-            % XXX MOVE
-            %obj.rootWrkDir=strrep(obj.rootWrkDir,'~\Code\mat','E:\matenv');
-            %obj.rootSWrkDir=strrep(obj.rootSWrkDir,'~\Code\mat','E:\matenv');
-            obj.rootWrkDir
-
-        end
     end
-    function obj=get_prjs(obj,bStable)
-        if bStable
-            obj.prjs=Px.getProjects(obj.rootStbDir);
-        else
-            obj.prjs=Px.getProjects(obj.rootPrjDir);
-        end
+%% PATH
+    function obj=get_self_path(obj)
+        obj.selfPath=obj.parent(mfilename('fullpath'));
+    end
+    function pathlist=get_paths(obj)
+        % XXX get dependency prjCompiledDirs
+        t=strcat(obj.rootSbinDir,obj.sbins);
+        pathlist=transpose({obj.prjCompiledDir obj.prjWDir t{:}});
+        pathlist(cellfun(@isempty,pathlist))=[];
+    end
+    function obj=get_prjs(obj)
+        obj.prjs=obj.PRJS;
         obj.prjs(ismember(obj.prjs,obj.ignoreDirs))=[];
-        obj.sprjs=Px.getProjects(obj.rootStbDir);
-        obj.sprjs(ismember(obj.sprjs,obj.ignoreDirs))=[];
-
     end
     function obj=disp_prjs(obj)
-        disp([newline '  r last open project']);
-        fprintf(['%3.0f Toolboxes Only' newline newline],0);
-        fprintf(['%-31s %-25s' newline],'DEVELOPMENT','STABLE');
+        disp([newline '  r last open poject']);
+        fprintf(['%3.0f Sbin Only' newline newline],0);
+        %fprintf(['%-31s %-25s' newline],'DEVELOPMENT','STABLE');
+        fprintf(['%-31s' newline],'PROJECTS')
         for i = 1:length(obj.prjs)
-            if i > length(obj.sprjs)
-                fprintf(['%3.0f %-25s' newline],i, obj.prjs{i});
-            elseif i > length(obj.prjs)
-                fprintf(['    %-25s   %3.0f %-25s' newline],repmat(' ',1,25),i+length(obj.prjs), obj.sprjs{i});
+            if i > length(obj.prjs)
+                %fprintf(['    %-25s   %3.0f %-25s' newline],repmat(' ',1,25),i+length(obj.prjs), obj.sprjs{i});
+                fprintf(['    %-25s   %3.0f %-25s' newline],repmat(' ',1,25),i+length(obj.prjs), ' ');
             else
-                fprintf(['%3.0f %-25s   %3.0f %-25s' newline],i, obj.prjs{i},i+length(obj.prjs), obj.sprjs{i});
+                %fprintf(['%3.0f %-25s   %3.0f %-25s' newline],i, obj.prjs{i},i+length(obj.prjs), ' ');
+                fprintf(['%3.0f %-25s ' newline],i, obj.prjs{i});
             end
         end
     end
@@ -322,19 +475,12 @@ methods
         cd(obj.prjDir);
     end
     function obj=get_prj_dir(obj)
-        %CHANGE DIRECTORY TO PROJECT DIRECTORY
-        if obj.stableflag==1 && ~strcmp(obj.prj,'_0_')
-            obj.prjDir=[obj.rootStbDir obj.prj filesep];
-            obj.prjWDir=[obj.rootSWrkDir obj.prj filesep];
-        elseif ~strcmp(obj.prj,'_0_')
-            obj.prjDir=([obj.rootPrjDir obj.prj filesep]);
-            obj.prjWDir=[obj.rootWrkDir obj.prj filesep];
-        end
+        obj.prjDir=([obj.rootPrjDir obj.prj filesep]);
+        obj.prjWDir=[obj.rootWrkDir obj.prj filesep];
     end
     function obj=prompt_prj(obj)
         %PROMPT FOR PROJECT
         val=['12345677890'];
-        obj.stableflag=0;
         while true
             resp=input('Which Project?: ','s');
             if strcmp(resp,'r')
@@ -354,9 +500,6 @@ methods
             elseif mod(resp,1)~=0
                 disp('Invalid response')
                 continue
-            elseif resp > length(obj.prjs) && resp <= (length(obj.prjs) + length(obj.sprjs))
-                obj.stableflag=1;
-                break
             elseif resp > length(obj.prjs)
                 disp('Invalid response')
                 continue
@@ -368,20 +511,18 @@ methods
         end
         if resp==0
             obj.prj='_0_';
-        elseif obj.stableflag==1
-            obj.prj=obj.sprjs{resp-length(obj.prjs)};
         else
             obj.prj=obj.prjs{resp};
         end
     end
     function obj=save_cur_prj(obj)
-        % TODO different for PC
-        if obj.stableflag==1
-            cmd=['echo s:' obj.prj ' > ' obj.selfPath '.current_project'];
-        else
-            cmd=['echo ' obj.prj ' > ' obj.selfPath '.current_project'];
-        end
-        system(cmd);
+        fname=[obj.curPrjLoc '.current_project'];
+        Fil.rewrite(fname,obj.prj);
+        %if isunix()
+        %    unix(cmd);
+        %else
+        %    system(cmd);
+        %end
     end
     function obj=run_hooks(obj)
         if exist([obj.rootHookDir obj.prj '.m'])==2
@@ -404,9 +545,9 @@ methods
 
             %EVAL AS FUNCTION OR SCRIPT
             if isfunc
-                out=eval([prj ';']);
+                out=eval([obj.prj ';']);
             else
-                eval([prj ';']);
+                eval([obj.prj ';']);
             end
 
             cd(old);
@@ -414,10 +555,11 @@ methods
     end
     function obj=get_prj_options(obj)
         [obj,exitflag]=obj.get_prj_options_helper(1);
-        if exitflag==1 & obj.bEcho
+        bEcho=ismember(obj.mode,{'reset','prompt'});
+        if exitflag==1 & bEcho
             disp(['No project config file found. Checking root config']);
         elseif isempty(obj.Options)
-            if obj.bEcho
+            if bEcho
                 disp(['Config file is empty. Checking root config.']);
             end
             exitflag=1;
@@ -430,10 +572,10 @@ methods
 
         if exitflag==1 && obj.bEcho
             disp('No config file found. Skipping.')
-            obj.Options{1}={obj.prjDir};
+            obj.Options(1).prj=obj.prjDir;
         elseif isempty(obj.Options) && obj.bEcho
             disp('Config entry does not exist. Skipping.')
-            obj.Options{1}={obj.prjDir};
+            obj.Options(1).prj=obj.prjDir;
         end
     end
     function [obj,exitflag]=get_prj_options_helper(obj,bPrjConfig)
@@ -443,8 +585,6 @@ methods
             config=obj.rootconfig;
         end
 
-        %function []=pxs(rootPrjDir,rootStbDir,rootTlbxDir)
-        %px symbolic links - handle dependencies
         % TODO
         % check for recursion
 
@@ -459,12 +599,19 @@ methods
         fid=fopen(config);
 
         %Section into seperate configs & create full paths
-        obj.Options=cell(0);
+        obj.Options=struct();
+        obj.Options.prj='';
+        obj.Options.add=cell(0,1);
+        obj.Options.rm=cell(0,1);
+        obj.Options.site=cell(0,1);
+        obj.Options.version=cell(0,1);
+
         bStart=bPrjConfig; % Indicates valid header has been identified
         if bPrjConfig
-            obj.Options{1}={obj.prjDir};
+            obj.Options(1).prj=obj.prjDir;
+            obj.Options(1).add{1,1}=obj.prjDir;
         end
-        configs={'root','history'};
+        configs={'root','history','projectile'};
         while true
             tline=fgetl(fid);
 
@@ -473,9 +620,10 @@ methods
 
             % SKIP EMPTY LIMES
             if isempty(tline); continue; end
+            if Str.RE.ismatch(tline,'^ *#'); continue; end
 
             % No indents indicate new block
-            bNew=~bPrjConfig && ~Px.regExp(tline,'^\s') && ~startsWith(tline,configs);
+            bNew=~bPrjConfig && ~Str.RE.ismatch(tline,'^\s') && ~startsWith(tline,configs);
 
             if ~bNew && ~bStart
                 continue
@@ -488,344 +636,229 @@ methods
         fclose(fid);
 
         function [obj,bStart]=get_header(obj,tline)
-            if Px.regExp(tline,'^[rR]oot:')
+            if Str.RE.ismatch(tline,'^[rR]oot:')  || Str.RE.ismatch(tline,'^curPrjLoc')
                 bStart=0;
                 return
             end
             bStart=1;
-            [a,b]=Px.strip_fun(tline,Px.sep); % a = s,d,e
-            dest=Px.sort_fun(a,b,obj.rootPrjDir,obj.rootStbDir,obj.hostname);
+            [code,dire,host,version]=Px.strip_fun(tline,Px.sep,obj.PRJS); % a = s,d,e
+            [dest,rdest,site]=Px.sort_fun(code,dire,host,version,obj.rootPrjDir,obj.libDir,obj.hostname);
             if isempty(dest)
                 return
             end
-            if isempty(obj.prj) || (strcmp(obj.prj,b(1:end-1)) && ((obj.stableflag==1 && a=='s') || ((obj.stableflag==0 && a=='d'))))
-                obj.Options{end+1}{1}=dest;
+            if isempty(obj.prj) || (strcmp(obj.prj,dire(1:end-1)))
+                obj.Options(end+1).prj=dest;
+                obj.Options(end).add{1,1}=dest;
+                obj.Options(end).rm{1,1}=dest;
+                obj.Options(end).version{1,1}=dest;
+                obj.Options(end).site{1,1}=dest;
             else
                 bStart=0;
             end
+
         end
         function obj=get_body(obj,tline)
-            [a,b]=Px.strip_fun(tline,Px.sep);
-            dest=Px.sort_fun(a,b,obj.rootPrjDir,obj.rootStbDir,obj.hostname);
-            if isempty(dest)
-                return
-            end
-            obj.Options{end}{end+1}=dest;
+            [code,dire,host,version]=Px.strip_fun(tline,Px.sep,obj.PRJS);
+            [dest,rdest,site]=Px.sort_fun(code,dire,host,version,obj.rootPrjDir,obj.libDir,obj.hostname);
+            obj.Options(end+1).add=dest;
+            obj.Options(end).rm=rdest;
+            obj.Options(end).version=version;
+            obj.Options(end).site=site;
+            %obj.Options(end).add{end+1,1}=dest;
+            %obj.Options(end).rm{end+1,1}=rdest;
+            %obj.Options(end).version{end+1,1}=version;
+            %obj.Options(end).site{end+1,1}=site;
         end
     end
     function obj=make_wrk_dir(obj)
-        if obj.stableflag==1
-            obj.curWrk=[obj.rootSWrkDir obj.prj filesep];
-        else
-            obj.curWrk=[obj.rootWrkDir obj.prj filesep];
-        end
+        obj.curWrk=[obj.rootWrkDir obj.prj filesep];
         if ~exist(obj.curWrk,'dir')
             mkdir(obj.curWrk);
         end
+        if obj.bProjectile && ~exist([obj.curWrk '.projectile'])
+            Fil.touch([obj.curWrk '.projectile']);
+        end
     end
     function obj=parse_prj_options(obj)
+        obj.clone_to_lib();
         obj.rm_removed_symlinks();
         obj.populate_wrk_dir();
+    end
+    function obj=clone_to_lib(obj);
+        for i = 2:length(obj.Options)
+            O=obj.Options(i);
+            if isempty(O.site)
+                return
+            end
+            Px.git_clone(O.site,O.add);
+            if ~isempty(O.version)
+                Px.git_checkout(O.add,O.version);
+            end
+
+        end
     end
     function obj=rm_removed_symlinks(obj)
         if isempty(obj.Options)
             return
         end
-        deps=obj.Options{1};
+        deps=transpose([obj.Options.add]);
         deps=cellfun(@get_name_fun,deps,'UniformOutput',false);
 
         dirs=dir(obj.curWrk);
+        dirs=dirs(3:end);
         name=transpose({dirs.name});
         full=join([transpose({dirs.folder}) name],filesep);
-        ind=vertcat(dirs.isdir) & ~ismember(name,[{'.','..'}, deps]);
+        bDir=vertcat(dirs.isdir);
+        %bDir=bDir(3:end);
+        %full=full(3:end);
+        %name=name(3:end);
+        ind=bDir & ~ismember(name,deps);
         rmdirs=full(ind);
         for i = 1:length(rmdirs)
             delete(rmdirs{i}); % works with symlinks
         end
 
         function out=get_name_fun(file)
-            if endsWith(file,'/')
+            if endsWith(file,filesep)
                 file=file(1:end-1);
             end
+            if endsWith(file,'.m')
+                ext='.m';
+            else
+                ext='';
+            end
             [~,out]=fileparts(file);
+            out=[out ext];
 
         end
     end
     function obj=populate_wrk_dir(obj);
         %Make sure that projects in each exist, then symlink
+        obj.wrkDirs={};
         for i=1:length(obj.Options)
-            O=obj.Options{i};
-            m=O{1}; %main project directory
-            if ~exist(m,'dir')
+            O=[obj.Options(i)];
+            if ~isempty(O.prj)
+                m=O.prj; %main project directory
+            elseif isempty(O.prj) && ~isempty(O.add)
+                m=O.add; %main project directory
+            elseif isempty(O.prj) && isempty(O.add)
+                continue
+            elseif ~exist(m,'dir')
                 disp(['Directory ' m ' does not exist']);
                 continue
             end
-            for j = 1:length(O)
-                s=O{j}; %dependencies
+            seen=cell(0,1);
+            for j = 1:length(O.add)
+                if iscell(O.add)
+                    s=O.add{j}; %dependencies
+                else
+                    s=O.add;
+                end
                 if ~exist(s,'dir')
                     disp(['Directory ' s ' does not exist']);
                     continue
                 end
-                [~,name]=fileparts(s(1:end-1));
-                s=s(1:end-1);
-                
-                %if (~ispc && ~exist([obj.curWrk name],'dir')) || (ispc && ~exist([obj.curWrk name],'file'))
-                if ~exist([obj.curWrk name],'dir')
-                    Px.LN(s,obj.curWrk);
-                else
-                    bTest=0;
-                    Px.fix_link([obj.curWrk name],s,bTest);
+                if endsWith(s,filesep)
+                    s=s(1:end-1);
                 end
+                if ismember(s,seen)
+                    continue
+                end
+                name=fliplr(strtok(fliplr(s),filesep));
+                dest=[obj.curWrk name];
+
+                Px.LN_fun(s,dest,0,obj.home);
+
+                %if (~ispc && ~exist([obj.curWrk name],'dir')) || (ispc && ~exist([obj.curWrk name],'file'))
+                seen=[seen; s];
+                obj.wrkDirs{end+1,1}=dest;
             end
         end
     end
+    function obj=lock_lib_files(obj)
+        % TODO make read only -> make readonly
+        % chmod -w
+    end
+    function obj=gen_gtags(obj)
+        if isunix()
+            unix([obj.selfPath 'gen_gtags.sh']);
+        else
+            disp('Gtags not yet supported for Windows')
+        end
+    end
+    function obj=echo(obj)
+        switch obj.mode
+        case {'prompt','startup'}
+            display('Done.')
+        case 'reset'
+            display(['Done reloading project ' obj.prj '.']);
+        end
+    end
 end
-methods(Static,Access=private)
-    function dire=filesepc(dire)
-        %function dire=filesepc(dire)
-        %adds filesep to end if it doesn't already exist
-        dire=strrep(dire,'/',filesep);
-        if ~endsWith(dire,filesep)
-            dire=[dire filesep];
-        elseif strcmp(dire(end),filesep) && strcmp(dire(end-1),filesep)
+methods(Static, Access=?Px_install)
+    function [code,dire,host,version]=strip_fun(tline,sep,prjs)
+        code=[];
+        dire=[];
+        host=[];
+        version=[];
+        %if Px.regexprep(tline,'^[a-z,A-Z]:')
+        strs=strsplit(tline,sep);
+
+        bVers=0;
+        for i = 1:length(strs)
+            str=strs{i};
+            if ischar(str) && numel(str)==1 && i==1
+                code=str;
+            elseif i==2 && length(strs)==3
+                host=str;
+            elseif ismember(filesep,str) || ismember(str,prjs) || (~isempty(code) && code=='l')
+                dire=Dir.parse(str);
+            elseif ismember(i,[3,4])
+                version=str;
+            end
+        end
+    end
+
+    function [dest,rdest,site]=sort_fun(code,dire,host,version,rootPrjDir,libDir,hostname)
+        dest=[];
+        rdest=[];
+        site=[];
+        if ~isempty(host) && ~strcmp(host,hostname)
+            return
+        end
+
+        switch code
+            case 'd'
+                dest=[rootPrjDir dire];
+            case 'e'
+                dest=dire;
+            case 'i'
+                rdest=dire;
+            case 'l'
+                site=dire;
+                if ~isempty(version)
+                    dire=Px.get_version_dire_name(version,dire);
+                end
+                dest=[libDir dire];
+            otherwise
+                error(['Invalid label ' code ' for ' dire]);
+        end
+        if ~isempty(dest)
+            dest=Dir.parse(dest);
+        end
+        if ~isempty(rdest)
+            rdest=Dir.parse(rdest);
+        end
+    end
+    function out=parent(dire)
+        if endsWith(dire,filesep)
             dire=dire(1:end-1);
         end
-    end
-    function out=rephome(in)
-        if ~ispc()
-            [~,home]=system('echo $HOME');
-            home=strrep(home,newline,'');
-        else
-            home='Y:'; % XXX ADD TO CONFIG
-        end
-        out=strrep(in,'~',home);
-    end
-    function out= issymboliclink(dire)
-        if ispc
-            cmd=['powershell -Command "((Get-Item ' dire ' -Force -ea SilentlyContinue).Attributes)'] %;-band [IO.FileAttributes]::ReparsePoint)"'];
-            [~,islink]=system(cmd);
-            islink=strrep(islink,newline,'');
-            out=strcmp(islink,'True');
-        else
-            out=~unix(['test -L ' dire]);
+        spl=strsplit(dire,filesep);
+        out=strjoin(spl(1:end-1),filesep);
+        if ~endsWith(out,filesep)
+            out=[out filesep];
         end
     end
-    function out = islinkbroken(dire)
-        out=~unix(['[[ ! -e ' dire ' ]] && echo 1']);
-    end
-
-    function out =linksource(dire)
-        if ispc
-            cmd=['powershell -Command "(Get-Item ' dire ').Target'];
-            [~,src]=system(cmd);
-            out=strrep(src,newline,'');
-            return
-        elseif ismac
-            str=['readlink ' dire];
-        elseif Px.islinux
-            str=['readlink -f ' dire];
-        end
-        [bS,out]=system(str);
-        out=out(1:end-1);
-        if bS==1
-            out=nan;
-        end
-    end
-
-    function bSuccess=LN(origin,destination)
-    %ln(origin,destination)
-    %create symbolic links
-        if ispc
-            [~,name]=fileparts(origin);
-            destination = [ destination name ];
-            %if exist(destination,'file')
-            %    bSuccess=1;
-            %    return
-            %end
-            %cmd=['runas /user:administrator "mklink ' origin ' ' destination '"'];
-            cmd=['mklink /d ' destination ' ' origin];
-        else
-            cmd=['ln -s ' origin ' ' destination];
-        end
-
-        [bSuccess]=system(cmd);
-    end
-
-    function out = regExp(cell,exp,bIgnoreCase)
-    %function out = regExp(cell,exp,bIgnoreCase)
-    %version of regexp that works will cells, returning a logical index
-        if ~exist('bIgnoreCase','var') || isempty(bIgnoreCase)
-            bIgnoreCase=0;
-        end
-        if ~iscell(cell) && bIgnoreCase==1
-            out=~isempty(regexp(cell,exp,'ignorecase'));
-        elseif ~iscell(cell)
-            out=~isempty(regexp(cell,exp,'ignorecase'));
-        elseif bIgnoreCase==1
-            out=~cell2mat(transpose(cellfun( @(x) isempty(regexp(x,exp,'ignorecase')),cell,'UniformOutput',false)));
-        else
-
-            out=~cell2mat(transpose(cellfun( @(x) isempty(regexp(x,exp)),cell,'UniformOutput',false)));
-        end
-    end
-    function hn = get_hostname()
-        [~,hn]=system('hostname');
-        hn=strrep(hn,newline,'');
-    end
-    function out = islinux()
-        switch computer
-        case {'GLNXA64','GLNXA32'}
-            out=1;
-        otherwise
-            out=0;
-        end
-    end
-    function []=fix_link(dire,gdSrc,bTest)
-        if ~exist('bTest','var') || isempty(bTest)
-            bTest=0;
-        end
-        gdSrc=Px.rephome(gdSrc);
-
-        islink=Px.issymboliclink(dire);
-        if islink==0
-            error([ 'Unexpected non-symbolic link at ' dire ]);
-        end
-
-        src=Px.linksource(dire);
-        if isnan(src)
-            error('Something went wrong');
-        end
-
-        if ~ispc
-            gdSrc=Px.linksource(gdSrc);
-        end
-        if ~bTest && ~strcmp(gdSrc,src)
-            warning(['Fixing bad symlink ' src ' to ' gdSrc]);
-            delete(dire);
-            Px.LN(gdSrc,dire);
-        elseif bTest
-            disp(dire);
-            disp(src);
-            disp(gdSrc);
-        end
-    end
-    function out=touch(fname)
-        out=fclose(fopen(fname,'w'));
-    end
-    function [a,b]=strip_fun(tline,sep)
-        [a,b]=strtok(tline,sep);
-        a=a(end);
-        b=b(2:end);
-        b=Px.filesepc(b);
-    end
-
-    function dest=sort_fun(a,b,rootPrjDir,rootStbDir,hostname)
-        switch a
-            case 's'
-                dest=[rootStbDir b];
-            case 'd'
-                dest=[rootPrjDir b];
-            case 'e'
-                [b,c]=strtok(b,':');
-                c=c(2:end);
-                if strcmp(hostname,b)
-                    dest=c;
-                else
-                    dest=[];
-                    return
-                end
-        end
-        if ~strcmp(dest(end),filesep)
-            dest=[dest filesep];
-        end
-    end
-    function lines=file2cell(fname)
-        fid = fopen(fname);
-        tline = fgetl(fid);
-        lines={};
-        while ischar(tline)
-            lines{end+1}=tline;
-            tline = fgetl(fid);
-        end
-        fclose(fid);
-    end
-
-end
-methods(Static)
-    function out=getProjects(rootPrjDir,accept)
-        if ~exist('accept','var') || isempty(accept)
-            accept=0;
-        end
-    % GET ALL PROJECTS IN PROJECT DIRECTORY
-        folder=dir(rootPrjDir);
-        ind=transpose([folder.isdir]);
-        f=transpose({folder.name});
-        folders=f(ind);
-        out=cell2mat(transpose(cellfun( @(x) isempty(regexp(x,'^\.')),folders,'UniformOutput',false)));
-        out=transpose(folders(out));
-        if ~accept
-            ind=startsWith(out,'_');
-            out(ind)=[];
-        end
-    end
-
-    function oldPath=addToPath(rootFolder)
-    % ADD DIRECTORIES AND SUBDIRECTORIES TO PATH CLEANLY
-        allFolders = genpath(rootFolder);
-        %allFolders
-        try
-            cleanFolders = Px.cleanPath(allFolders);
-            oldPath = addpath(cleanFolders, '-end');
-        catch
-            warning('Problem adding path. Likley a borken sym link.');
-        end
-    end
-
-    function cleanPath = cleanPath(originalPath)
-    % CLEANUP A GENERATED PATH
-
-        % BREAK THE PATH INTO SEPARATE ENTRIES
-        scanResults = textscan(originalPath, '%s', 'delimiter', pathsep());
-        pathElements = scanResults{1};
-
-        % LOCATE SVN, GIT, MERCURIAL ENTRIES
-        isCleanFun = @(s) isempty(regexp(s, '_Ar|_old|\.svn|\.git|\.hg', 'once'));
-        isClean = cellfun(isCleanFun, pathElements);
-
-        % PRINT A NEW, CLEAN PATH
-        cleanElements = pathElements(isClean);
-        cleanPath = sprintf(['%s' pathsep()], cleanElements{:});
-    end
-    function prj=get_current()
-        fname=mfilename;
-        fdir=mfilename('fullpath');
-        fdir=strrep(fdir,fname,'');
-
-        fid=fopen([fdir '.current_project']);
-        tline=fgets(fid);
-        fclose(fid);
-
-        prj=strtrim(strrep(tline,char(10),''));
-
-    end
-    function reset(bEcho)
-        if ~exist('bEcho','var') || isempty(bEcho)
-            bEcho = 1;
-        end
-        %^Reloads current or last open project
-        prj=Px.get_current();
-        Px(prj,[],0);
-        if bEcho
-            display(['Done reloading project ' prj '.']);
-        end
-    end
-    function startup()
-        if ismac
-            Px('_0_');
-        else
-            Px(1);
-        end
-    end
-
 end
 end
